@@ -1,0 +1,95 @@
+346:    Ground: 'bg-amber-700',
+369:    Ground: 'from-amber-700 to-amber-800',
+419:    color: 'text-amber-400', 
+420:    bg: 'bg-amber-950/80', 
+421:    border: 'border-amber-500/40', 
+427:    glow: 'from-amber-500/30 to-transparent',
+428:    shadow: 'shadow-amber-900/50'
+1465:            <div className="px-2 py-0.5 rounded-lg text-[9px] font-black bg-gradient-to-r from-amber-400 to-yellow-300 text-black border border-yellow-200 flex items-center gap-1 shadow-lg shadow-amber-500/20">
+1526:            <div className={`text-xs font-black ${stat.iv === 31 ? 'text-amber-400' : stat.iv === 0 ? 'text-red-400' : 'text-white'}`}>
+1529:            <div className={`text-[6px] font-bold uppercase ${stat.iv === 31 ? 'text-amber-500/60' : 'text-zinc-600'}`}>IV:{stat.iv}</div>
+1576:              <span className="text-[9px] font-black text-amber-400">{pokemon.powerLevel}/10</span>
+1582:                className="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full shadow-inner" 
+1595:            className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg ${canPowerUp ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
+1641:            className="flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20"
+4292:                { id: 'event', icon: Sparkles, label: 'Eventos', color: 'amber' },
+4297:                { id: 'league', icon: Building2, label: 'Liga Pokémon', color: 'amber' },
+4299:                { id: 'hallOfFame', icon: Award, label: 'Salón Fama', color: 'amber' },
+4352:              { id: 'event', icon: Sparkles, label: 'Eventos', color: 'amber' },
+4357:              { id: 'league', icon: Building2, label: 'Liga Pokémon', color: 'amber' },
+4359:              { id: 'hallOfFame', icon: Award, label: 'Salón Fama', color: 'amber' },
+4528:                <Coins size={12} className="text-amber-400" />
+4679:                  <div className="flex items-center gap-1.5 text-amber-400">
+5177:                            <div className="flex items-center justify-end gap-2 text-amber-400 font-black">
+5261:                      <div className="text-amber-400 font-black text-2xl">{defeatedGyms.length}/8</div>
+5296:                      case 'Electric': return <Zap size={24} className="text-amber-400" />;
+5379:                    className="relative p-12 rounded-[48px] border-4 border-amber-500/30 bg-zinc-900 overflow-hidden text-center shadow-2xl shadow-amber-500/10"
+5389:                        className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-amber-500/10 to-transparent rounded-full blur-3xl"
+5405:                        className="w-32 h-32 bg-gradient-to-b from-amber-400 to-amber-600 rounded-[40px] mx-auto flex items-center justify-center shadow-2xl shadow-amber-500/40 border-4 border-white/20"
+5412:                          Campeonato <span className="text-amber-400">Final</span>
+5423:                          <Trophy size={20} className="text-amber-400" />
+5430:                        className="group relative px-12 py-6 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-2xl uppercase italic rounded-[32px] transition-all hover:scale-105 active:scale-95 shadow-xl shadow-amber-500/20"
+5459:                    <Clock size={14} className="text-amber-400" />
+5477:                    <div className={`p-8 md:p-12 rounded-[48px] border-2 ${activeEvent.color} bg-zinc-900 relative overflow-hidden group shadow-2xl shadow-amber-500/20`}>
+5485:                            <span className="px-4 py-1 rounded-full bg-amber-500 text-black text-[10px] font-black uppercase tracking-widest">Evento Especial</span>
+5499:                              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-500">
+5556:                      <div className="w-2 h-8 rounded-full bg-amber-500" />
+5581:                              className="h-full rounded-full bg-gradient-to-r from-amber-600 to-amber-400"
+5589:                                  {key === 'coins' && <Coins size={10} className="text-amber-400" />}
+5654:                      <div className={`w-2 h-8 rounded-full ${type === 'daily' ? 'bg-rose-500' : type === 'weekly' ? 'bg-indigo-500' : type === 'event' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+5661:                          className="ml-auto px-4 py-1 bg-amber-500 text-black text-[10px] font-black uppercase tracking-widest rounded-full hover:scale-105 transition-all"
+5689:                              className={`h-full rounded-full bg-gradient-to-r ${type === 'daily' ? 'from-rose-600 to-rose-400' : type === 'weekly' ? 'from-indigo-600 to-indigo-400' : type === 'event' ? 'from-amber-600 to-amber-400' : 'from-emerald-600 to-emerald-400'}`}
+5697:                                  {key === 'coins' && <Coins size={10} className="text-amber-400" />}
+5739:                  <Store className="text-amber-500" size={48} /> Poké Tienda
+5805:                  <Coins className="text-amber-400" size={32} />
+5817:                        case 'master': return 'from-amber-400 to-amber-600';
+5844:                            <div className="text-2xl font-black text-amber-400 flex items-center justify-center gap-2">
+5880:                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 flex flex-col items-center text-center space-y-6 group hover:border-amber-500/50 transition-all">
+5881:                    <div className="w-32 h-40 bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl shadow-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
+5888:                    <div className="text-3xl font-black text-amber-400">500 <span className="text-xs">Monedas</span></div>
+5898:                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${coins >= 500 && energy < 100 ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+5904:                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 flex flex-col items-center text-center space-y-6 group hover:border-amber-500/50 transition-all">
+5905:                    <div className="w-32 h-40 bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl shadow-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
+5912:                    <div className="text-3xl font-black text-amber-400">4500 <span className="text-xs">Monedas</span></div>
+5922:                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${coins >= 4500 && energy < 100 ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+5936:                    <div className="text-3xl font-black text-amber-400">300 <span className="text-xs">Monedas</span></div>
+6005:                        <div className="text-2xl font-black text-amber-400 mb-4">{offer.cost} <span className="text-xs">Monedas</span></div>
+6069:                              <div className="text-xl font-black text-amber-400 flex items-center gap-2">
+6133:                            <div className="text-xl font-black text-amber-400 flex items-center justify-center gap-2">
+6169:                    <Award size={14} className="text-amber-400" /> Jerarquía de la Liga
+6219:                      <Trophy className="text-amber-400" /> {getLeagueName(leagueLevel)}
+6245:                            <td className="py-4 text-center font-black text-amber-400">{t.points}</td>
+6316:                              ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20' 
+6338:                          className="w-full py-4 border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+6403:                          className="w-24 h-24 bg-amber-500 rounded-full mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(245,158,11,0.3)]"
+6486:                            <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-2xl p-6 space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.1)]">
+6499:                                <div className="text-3xl font-black italic text-amber-400">{tournamentBracket.final.homeScore} - {tournamentBracket.final.awayScore}</div>
+6504:                                  className="w-full py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-xl text-xs font-black uppercase shadow-lg shadow-amber-500/20"
+6522:                              className="bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl p-8 text-white shadow-2xl shadow-amber-500/40 flex flex-col items-center text-center"
+6713:                                    <div className="text-xs font-black uppercase italic text-amber-400 flex items-center gap-2">
+6724:                                    className="h-full bg-gradient-to-r from-amber-600 to-amber-400" 
+6730:                                  className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${canPowerUp && p.powerLevel < 10 ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+6861:                                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${(coins >= LIMIT_BREAK_COST_COINS && stardust >= LIMIT_BREAK_COST_STARDUST) ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-xl shadow-rose-500/20 animate-pulse' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+6893:                                    className="w-full py-4 rounded-2xl border-2 border-amber-500 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-lg shadow-amber-500/20"
+6987:                  <Award className="text-amber-500" size={64} /> Salón de la Fama
+7003:                      className="bg-zinc-900 border-2 border-amber-500/30 rounded-[40px] p-8 relative overflow-hidden group"
+7005:                      <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-[60px] rounded-full -mr-16 -mt-16" />
+7018:                          <div className="text-amber-500 font-black uppercase text-xs tracking-widest">Leyenda Nivel 50</div>
+7040:                            <span className="text-amber-400">{p.mvpCount || 0} veces</span>
+7050:                        <div className="px-4 py-2 bg-amber-500/10 rounded-full border border-amber-500/20 text-[10px] font-black uppercase tracking-widest text-amber-500">
+7168:                      <Coins className="text-amber-400 mb-2" size={20} />
+7251:                      className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${notificationsEnabled ? 'bg-amber-500/10 border-amber-500/50' : 'bg-black/40 border-white/5'}`}
+7254:                        <Bell className={notificationsEnabled ? 'text-amber-400' : 'text-zinc-500'} size={20} />
+7260:                      <div className={`w-10 h-5 rounded-full p-1 transition-colors ${notificationsEnabled ? 'bg-amber-500' : 'bg-zinc-700'}`}>
+7479:                                <span className={coinsToSpend > 0 ? 'text-amber-400' : 'text-zinc-500'}>-{coinsToSpend}</span>
+8052:                    <Award className="text-amber-400" /> Jerarquía de la Liga
+8059:                            i < 3 ? 'bg-zinc-500' : i < 6 ? 'bg-indigo-500' : 'bg-amber-500'
+8134:              <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-64 h-64 bg-amber-500/20 blur-[100px] rounded-full" />
+8144:                <Trophy size={160} className="text-amber-400 drop-shadow-[0_0_30px_rgba(251,191,36,0.5)]" />
+8150:                  <Crown size={64} className="text-amber-300" />
+8158:                <p className="text-amber-400 font-black uppercase tracking-[0.3em] text-sm md:text-base">
+8181:                className="w-full py-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-[32px] font-black uppercase tracking-widest text-lg transition-all shadow-2xl shadow-amber-500/40"
+8313:                              <div className="h-full bg-amber-400" style={{ width: `${(selectedPokemon.powerLevel / 10) * 100}%` }} />
+8355:                          <div className="text-sm font-black text-amber-400">{selectedPokemon.mvpCount || 0}</div>
+8542:              className={`bg-zinc-900 border ${celebration.type === 'win' ? 'border-emerald-500' : 'border-amber-500'} rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center`}
+8544:              <div className={`p-4 rounded-full mb-4 ${celebration.type === 'win' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>

@@ -1,0 +1,336 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --animate-shine: shine 2s infinite;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  
+  @keyframes shine {
+    0% {
+      transform: translateX(-100%) skewX(-12deg);
+    }
+    100% {
+      transform: translateX(200%) skewX(-12deg);
+    }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+}
+
+/* Theme Overrides */
+[data-theme="slate"] {
+  --color-zinc-50: #f8fafc;
+  --color-zinc-100: #f1f5f9;
+  --color-zinc-200: #e2e8f0;
+  --color-zinc-300: #cbd5e1;
+  --color-zinc-400: #94a3b8;
+  --color-zinc-500: #64748b;
+  --color-zinc-600: #475569;
+  --color-zinc-700: #334155;
+  --color-zinc-800: #1e293b;
+  --color-zinc-900: #0f172a;
+  --color-zinc-950: #020617;
+  
+  --color-indigo-50: #f5f3ff;
+  --color-indigo-100: #ede9fe;
+  --color-indigo-200: #ddd6fe;
+  --color-indigo-300: #c4b5fd;
+  --color-indigo-400: #a78bfa;
+  --color-indigo-500: #8b5cf6;
+  --color-indigo-600: #7c3aed;
+  --color-indigo-700: #6d28d9;
+  --color-indigo-800: #5b21b6;
+  --color-indigo-900: #4c1d95;
+  --color-indigo-950: #2e1065;
+
+  --color-rose-50: #fdf4ff;
+  --color-rose-100: #fae8ff;
+  --color-rose-200: #f5d0fe;
+  --color-rose-300: #f0abfc;
+  --color-rose-400: #e879f9;
+  --color-rose-500: #d946ef;
+  --color-rose-600: #c026d3;
+  --color-rose-700: #a21caf;
+  --color-rose-800: #86198f;
+  --color-rose-900: #701a75;
+  --color-rose-950: #4a044e;
+}
+
+[data-theme="stone"] {
+  --color-zinc-50: #fafaf9;
+  --color-zinc-100: #f5f5f4;
+  --color-zinc-200: #e7e5e4;
+  --color-zinc-300: #d6d3d1;
+  --color-zinc-400: #a8a29e;
+  --color-zinc-500: #78716c;
+  --color-zinc-600: #57534e;
+  --color-zinc-700: #44403c;
+  --color-zinc-800: #292524;
+  --color-zinc-900: #1c1917;
+  --color-zinc-950: #0c0a09;
+
+  --color-indigo-50: #fff7ed;
+  --color-indigo-100: #ffedd5;
+  --color-indigo-200: #fed7aa;
+  --color-indigo-300: #fdba74;
+  --color-indigo-400: #fb923c;
+  --color-indigo-500: #f97316;
+  --color-indigo-600: #ea580c;
+  --color-indigo-700: #c2410c;
+  --color-indigo-800: #9a3412;
+  --color-indigo-900: #7c2d12;
+  --color-indigo-950: #431407;
+
+  --color-rose-50: #fffbeb;
+  --color-rose-100: #fef3c7;
+  --color-rose-200: #fde68a;
+  --color-rose-300: #fcd34d;
+  --color-rose-400: #fbbf24;
+  --color-rose-500: #f59e0b;
+  --color-rose-600: #d97706;
+  --color-rose-700: #b45309;
+  --color-rose-800: #92400e;
+  --color-rose-900: #78350f;
+  --color-rose-950: #451a03;
+}
+
+[data-theme="neutral"] {
+  --color-zinc-50: #fafafa;
+  --color-zinc-100: #f5f5f5;
+  --color-zinc-200: #e5e5e5;
+  --color-zinc-300: #d4d4d4;
+  --color-zinc-400: #a3a3a3;
+  --color-zinc-500: #737373;
+  --color-zinc-600: #525252;
+  --color-zinc-700: #404040;
+  --color-zinc-800: #262626;
+  --color-zinc-900: #171717;
+  --color-zinc-950: #0a0a0a;
+
+  --color-indigo-50: #f9fafb;
+  --color-indigo-100: #f3f4f6;
+  --color-indigo-200: #e5e7eb;
+  --color-indigo-300: #d1d5db;
+  --color-indigo-400: #9ca3af;
+  --color-indigo-500: #6b7280;
+  --color-indigo-600: #4b5563;
+  --color-indigo-700: #374151;
+  --color-indigo-800: #1f2937;
+  --color-indigo-900: #111827;
+  --color-indigo-950: #030712;
+
+  --color-rose-50: #fafafa;
+  --color-rose-100: #f4f4f5;
+  --color-rose-200: #e4e4e7;
+  --color-rose-300: #d4d4d8;
+  --color-rose-400: #a1a1aa;
+  --color-rose-500: #71717a;
+  --color-rose-600: #52525b;
+  --color-rose-700: #3f3f46;
+  --color-rose-800: #27272a;
+  --color-rose-900: #18181b;
+  --color-rose-950: #09090b;
+}
+
+[data-theme="blue"] {
+  --color-zinc-50: #eff6ff;
+  --color-zinc-100: #dbeafe;
+  --color-zinc-200: #bfdbfe;
+  --color-zinc-300: #93c5fd;
+  --color-zinc-400: #60a5fa;
+  --color-zinc-500: #3b82f6;
+  --color-zinc-600: #2563eb;
+  --color-zinc-700: #1d4ed8;
+  --color-zinc-800: #1e40af;
+  --color-zinc-900: #1e3a8a;
+  --color-zinc-950: #172554;
+
+  --color-indigo-50: #ecfeff;
+  --color-indigo-100: #cffafe;
+  --color-indigo-200: #a5f3fc;
+  --color-indigo-300: #67e8f9;
+  --color-indigo-400: #22d3ee;
+  --color-indigo-500: #06b6d4;
+  --color-indigo-600: #0891b2;
+  --color-indigo-700: #0e7490;
+  --color-indigo-800: #155e75;
+  --color-indigo-900: #164e63;
+  --color-indigo-950: #083344;
+
+  --color-rose-50: #f0f9ff;
+  --color-rose-100: #e0f2fe;
+  --color-rose-200: #bae6fd;
+  --color-rose-300: #7dd3fc;
+  --color-rose-400: #38bdf8;
+  --color-rose-500: #0ea5e9;
+  --color-rose-600: #0284c7;
+  --color-rose-700: #0369a1;
+  --color-rose-800: #075985;
+  --color-rose-900: #0c4a6e;
+  --color-rose-950: #082f49;
+}
+
+[data-theme="emerald"] {
+  --color-zinc-50: #ecfdf5;
+  --color-zinc-100: #d1fae5;
+  --color-zinc-200: #a7f3d0;
+  --color-zinc-300: #6ee7b7;
+  --color-zinc-400: #34d399;
+  --color-zinc-500: #10b981;
+  --color-zinc-600: #059669;
+  --color-zinc-700: #047857;
+  --color-zinc-800: #065f46;
+  --color-zinc-900: #064e3b;
+  --color-zinc-950: #022c22;
+
+  --color-indigo-50: #f0fdfa;
+  --color-indigo-100: #ccfbf1;
+  --color-indigo-200: #99f6e4;
+  --color-indigo-300: #5eead4;
+  --color-indigo-400: #2dd4bf;
+  --color-indigo-500: #14b8a6;
+  --color-indigo-600: #0d9488;
+  --color-indigo-700: #0f766e;
+  --color-indigo-800: #115e59;
+  --color-indigo-900: #134e4a;
+  --color-indigo-950: #042f2e;
+
+  --color-rose-50: #f0fdf4;
+  --color-rose-100: #dcfce7;
+  --color-rose-200: #bbf7d0;
+  --color-rose-300: #86efac;
+  --color-rose-400: #4ade80;
+  --color-rose-500: #22c55e;
+  --color-rose-600: #16a34a;
+  --color-rose-700: #15803d;
+  --color-rose-800: #166534;
+  --color-rose-900: #14532d;
+  --color-rose-950: #052e16;
+}
+
+[data-theme="rose"] {
+  --color-zinc-50: #fff1f2;
+  --color-zinc-100: #ffe4e6;
+  --color-zinc-200: #fecdd3;
+  --color-zinc-300: #fda4af;
+  --color-zinc-400: #fb7185;
+  --color-zinc-500: #f43f5e;
+  --color-zinc-600: #e11d48;
+  --color-zinc-700: #be123c;
+  --color-zinc-800: #9f1239;
+  --color-zinc-900: #881337;
+  --color-zinc-950: #4c0519;
+
+  --color-indigo-50: #fdf2f8;
+  --color-indigo-100: #fce7f3;
+  --color-indigo-200: #fbcfe8;
+  --color-indigo-300: #f9a8d4;
+  --color-indigo-400: #f472b6;
+  --color-indigo-500: #ec4899;
+  --color-indigo-600: #db2777;
+  --color-indigo-700: #be185d;
+  --color-indigo-800: #9d174d;
+  --color-indigo-900: #831843;
+  --color-indigo-950: #500724;
+
+  --color-rose-50: #fef2f2;
+  --color-rose-100: #fee2e2;
+  --color-rose-200: #fecaca;
+  --color-rose-300: #fca5a5;
+  --color-rose-400: #f87171;
+  --color-rose-500: #ef4444;
+  --color-rose-600: #dc2626;
+  --color-rose-700: #b91c1c;
+  --color-rose-800: #991b1b;
+  --color-rose-900: #7f1d1d;
+  --color-rose-950: #450a0a;
+}
+
+/* =========================================
+   NUEVA BARRA DE SCROLL ELEGANTE Y AMIGABLE
+   ========================================= */
+
+/* Estilos para Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+/* Estilos para Chrome, Edge, Safari, Opera */
+*::-webkit-scrollbar {
+  width: 8px; /* Ancho de la barra vertical */
+  height: 8px; /* Alto de la barra horizontal (si aplica) */
+}
+
+/* El fondo (track) de la barra */
+*::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1); 
+  border-radius: 10px;
+}
+
+/* La barrita (thumb) que se mueve */
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+}
+
+/* Efecto cuando pasas el mouse por encima de la barrita */
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* ========================================= */
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.text-shadow-glow {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.force-white-text * {
+  color: white !important;
+}
+
+/* =========================================
+   SOLUCIÓN GLOBAL PARA CONTRASTE DE TEXTO
+   ========================================= */
+
+/* Fuerza a que cualquier etiqueta que use fondos oscuros tenga texto blanco automáticamente */
+[class*="bg-black/"], 
+[class*="bg-slate-800"], 
+[class*="bg-slate-900"], 
+[class*="bg-zinc-950"] {
+  color: #ffffff !important;
+}
+
+/* Asegura que los textos secundarios hereden el blanco */
+[class*="bg-black/"] *, 
+[class*="bg-slate-800"] *, 
+[class*="bg-slate-900"] *,
+[class*="bg-zinc-950"] * {
+  color: inherit;
+}
+
+/* =========================================
+   EXCEPCIÓN: PROTEGER LOS BOTONES Y FONDOS BLANCOS
+   ========================================= */
+.bg-white, 
+.bg-slate-50, 
+.bg-zinc-100 {
+  color: #0f172a !important; /* Fuerza el texto a color oscuro (azul oscuro casi negro) */
+}
+
+.bg-white *, 
+.bg-slate-50 *, 
+.bg-zinc-100 * {
+  color: #0f172a !important; 
+}

@@ -1,0 +1,394 @@
+344:    Normal: 'bg-zinc-400',
+353:    Dark: 'bg-zinc-800',
+355:  return colors[type] || 'bg-zinc-400';
+367:    Normal: 'from-zinc-400 to-zinc-500',
+376:    Dark: 'from-zinc-800 to-zinc-900',
+378:  return colors[type] || 'from-zinc-400 to-zinc-500';
+383:    color: 'text-zinc-400', 
+384:    bg: 'bg-zinc-900/80', 
+385:    border: 'border-zinc-700/50', 
+391:    glow: 'from-zinc-500/5 to-transparent',
+392:    shadow: 'shadow-zinc-900/20'
+1509:            <div className="text-[8px] font-black text-zinc-300 uppercase bg-zinc-500/20 px-2 py-0.5 rounded border border-zinc-500/30 backdrop-blur-sm truncate max-w-[90px]">
+1525:            <div className="text-[7px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">{stat.label}</div>
+1529:            <div className={`text-[6px] font-bold uppercase ${stat.iv === 31 ? 'text-amber-500/60' : 'text-zinc-600'}`}>IV:{stat.iv}</div>
+1539:            <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-400 uppercase tracking-widest">
+1545:          <div className="h-2 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+1558:              <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Nivel</span>
+1563:            <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+1575:              <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Poder</span>
+1578:            <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+1595:            className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg ${canPowerUp ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
+1605:            className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg ${canTrain ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
+1615:            className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(225,29,72,0.4)] ${canEvolve ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
+1624:            className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg ${canUseBandita ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
+1633:            className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg ${canHealFatigue ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
+1808:  const [arenaBg, setArenaBg] = useState('bg-zinc-950');
+1841:  const [theme, setTheme] = useState(() => localStorage.getItem('plm_theme') || 'zinc');
+4206:          className="bg-zinc-900 border border-white/10 rounded-[32px] p-8 max-w-md w-full shadow-2xl relative overflow-hidden"
+4220:                className="text-zinc-500 hover:text-white transition-colors p-2"
+4226:            <p className="text-zinc-400 font-medium leading-relaxed">
+4233:                className="flex-1 px-6 py-4 rounded-2xl bg-zinc-800 text-zinc-400 text-xs font-black uppercase tracking-widest hover:bg-zinc-700 transition-all"
+4252:    <div data-theme={theme} className="flex h-screen bg-zinc-950 overflow-hidden font-sans selection:bg-rose-500/30 transition-colors duration-500">
+4274:            className="fixed top-0 left-0 bottom-0 w-72 bg-zinc-900 z-[70] lg:hidden flex flex-col border-r border-white/5"
+4283:              <button onClick={() => setIsSidebarOpen(false)} className="text-zinc-500 hover:text-white">
+4300:                { id: 'settings', icon: Settings, label: 'Ajustes', color: 'zinc' },
+4307:                      ? `bg-${tab.color === 'zinc' ? 'zinc-700' : tab.color + '-600'} text-white shadow-lg shadow-${tab.color === 'zinc' ? 'zinc-700' : tab.color + '-600'}/20` 
+4308:                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+4311:                  <tab.icon size={20} className={activeTab === tab.id ? 'text-white' : `group-hover:text-${tab.color === 'zinc' ? 'zinc-400' : tab.color + '-400'} transition-colors`} />
+4319:                <div className="text-[10px] font-bold text-zinc-400 uppercase mb-2">Manager</div>
+4326:                    <div className="text-[8px] font-bold text-zinc-500 uppercase">{getLeagueName(leagueLevel)}</div>
+4337:        <aside className="hidden lg:flex w-72 flex-col border-r border-white/5 bg-zinc-900/50 backdrop-blur-xl z-50">
+4345:            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Elite League Edition</p>
+4360:              { id: 'settings', icon: Settings, label: 'Ajustes', color: 'zinc' },
+4367:                    ? `bg-${tab.color === 'zinc' ? 'zinc-700' : tab.color + '-600'} text-white shadow-lg shadow-${tab.color === 'zinc' ? 'zinc-700' : tab.color + '-600'}/20` 
+4368:                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+4371:                <tab.icon size={20} className={activeTab === tab.id ? 'text-white' : `group-hover:text-${tab.color === 'zinc' ? 'zinc-400' : tab.color + '-400'} transition-colors`} />
+4378:            <div className="flex items-center justify-between text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+4386:              <div className="text-[10px] font-bold text-zinc-400 uppercase mb-2">Manager</div>
+4393:                  <div className="text-[8px] font-bold text-zinc-500 uppercase">{getLeagueName(leagueLevel)}</div>
+4486:                      className="px-12 py-4 bg-white text-black font-black uppercase tracking-widest text-sm rounded-full hover:bg-zinc-200 transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+4499:          <header className="h-20 border-b border-white/5 bg-zinc-900/50 backdrop-blur-xl flex items-center justify-between px-4 md:px-8 sticky top-0 z-40">
+4503:                className="lg:hidden w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-white hover:bg-zinc-700 transition-colors"
+4514:                  <div className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Manager de Liga</div>
+4522:                <div className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Temporada</div>
+4560:              className="fixed inset-0 z-[300] bg-zinc-950 flex flex-col items-center justify-start md:justify-center p-4 md:p-8 text-center overflow-y-auto custom-scrollbar"
+4573:                  <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs md:text-sm">Tu aventura como manager Pokémon comienza aquí</p>
+4579:                    className="p-4 bg-zinc-900 border border-white/10 rounded-full hover:bg-zinc-800 transition-colors"
+4594:                        className="w-full bg-zinc-900 border border-white/5 rounded-[32px] md:rounded-[40px] p-8 group transition-all hover:border-white/20 hover:bg-zinc-800/50 flex flex-col items-center space-y-6"
+4609:                              <span key={t} className="px-3 py-1 bg-white/5 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/5 text-zinc-500">{t}</span>
+4613:                        <div className="w-full py-4 bg-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest text-zinc-400 group-hover:bg-rose-600 group-hover:text-white transition-all">
+4622:                    className="p-4 bg-zinc-900 border border-white/10 rounded-full hover:bg-zinc-800 transition-colors"
+4635:              className="fixed inset-0 z-[100] bg-zinc-950 flex flex-col"
+4638:              <div className="h-14 md:h-16 border-b border-white/5 bg-zinc-900 flex items-center justify-between px-3 md:px-6">
+4644:                  <span className="text-zinc-600 font-black italic text-xs md:text-base">VS</span>
+4652:                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Liga Regional</div>
+4657:                    className="flex items-center gap-1 md:gap-2 px-2 md:px-4 py-1.5 md:py-2 bg-zinc-800 rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold hover:bg-zinc-700 transition-colors"
+4663:                    className={`flex items-center gap-1 md:gap-2 px-2 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold transition-colors ${battleData.isAuto ? 'bg-rose-600 text-white' : 'bg-zinc-800 text-zinc-400'}`}
+4672:                    className="hidden sm:flex items-center gap-1 md:gap-2 px-2 md:px-4 py-1.5 md:py-2 bg-zinc-800 rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold hover:bg-zinc-700 transition-colors text-zinc-400"
+4712:                      <div className="absolute bottom-0 right-0 w-full h-1 bg-gradient-to-r from-transparent via-zinc-200 to-transparent opacity-50" />
+4844:                          <div className="h-1.5 md:h-2 bg-zinc-800 rounded-full overflow-hidden">
+4858:                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-zinc-200 to-transparent opacity-50" />
+4901:                          className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${battleData.momentum >= 30 && battleData.turn === 'player' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30' : 'bg-zinc-900/50 border-white/5 text-zinc-600 opacity-50'}`}
+4910:                          className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${battleData.momentum >= 50 && battleData.turn === 'player' ? 'bg-rose-500/20 border-rose-500/40 text-rose-400 hover:bg-rose-500/30' : 'bg-zinc-900/50 border-white/5 text-zinc-600 opacity-50'}`}
+4919:                          className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${battleData.momentum >= 40 && battleData.turn === 'player' ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/30' : 'bg-zinc-900/50 border-white/5 text-zinc-600 opacity-50'}`}
+4957:                        <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-3 md:p-4 shadow-2xl flex flex-col gap-1.5 md:gap-2 border border-zinc-200">
+4977:                            className="py-1.5 md:py-2 text-center text-zinc-500 font-black text-xs md:text-sm hover:text-zinc-800 uppercase tracking-widest"
+5000:                              className={`flex items-center justify-between p-2 rounded-xl ${idx === battleData.playerIdx ? 'bg-zinc-200' : member.hp <= 0 ? 'bg-red-100 opacity-50' : 'bg-zinc-50 hover:bg-zinc-100'} transition-colors text-left`}
+5016:                            className="py-2 text-center text-zinc-500 font-bold hover:text-zinc-800"
+5046:                <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
+5050:                    <h2 className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1">Poder del Equipo</h2>
+5060:                    <p className="text-zinc-400 text-sm mt-4 max-w-xs">
+5080:                        className={`aspect-square bg-zinc-800/50 rounded-2xl border border-white/5 flex items-center justify-center overflow-hidden group ${teamMembers[i] ? 'cursor-pointer hover:border-indigo-500/50 hover:bg-zinc-800' : ''}`}
+5096:                          <div className="text-zinc-700"><Users size={24} /></div>
+5103:                <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 flex flex-col justify-center items-center text-center space-y-4">
+5108:                  <p className="text-zinc-500 text-sm max-w-xs">Completa desafíos cada día para obtener recompensas exclusivas y mejorar tu equipo.</p>
+5123:                    <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+5134:                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${isBulkTrainingMode ? 'bg-rose-600 text-white' : 'bg-white/5 text-zinc-400 hover:bg-white/10'}`}
+5170:                            <div className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Seleccionados</div>
+5190:                            className={`px-8 py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${selectedForBulkTrain.length > 0 && tp >= bulkTrainCosts.tpCost && coins >= bulkTrainCosts.coinCost ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+5222:                          className={`absolute -top-2 -right-2 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all z-20 ${team.includes(p.instanceId) ? 'bg-indigo-500 border-indigo-400 text-white' : 'bg-zinc-900 border-zinc-700 text-zinc-700 hover:text-zinc-400'}`}
+5243:              <div className="relative overflow-hidden bg-zinc-900 border border-white/5 rounded-[40px] p-8 md:p-12">
+5255:                      <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">El camino hacia la gloria eterna</p>
+5262:                      <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500 leading-tight">Medallas<br/>Obtenidas</div>
+5277:                          className={`flex-1 rounded-lg transition-all duration-500 ${i < defeatedGyms.length ? 'bg-gradient-to-r from-indigo-600 to-violet-600 shadow-lg shadow-indigo-500/20' : 'bg-zinc-800'}`}
+5301:                      default: return <Star size={24} className="text-zinc-400" />;
+5315:                            ? 'bg-zinc-900 border-white/10 hover:border-indigo-500/50' 
+5316:                            : 'bg-zinc-950 border-white/5 opacity-60 grayscale'
+5325:                          <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Gimnasio {index + 1}</div>
+5330:                          <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-xl">👤</div>
+5332:                            <div className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Líder</div>
+5339:                            <div className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Nivel Sugerido</div>
+5355:                            <div className="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center text-zinc-600">
+5379:                    className="relative p-12 rounded-[48px] border-4 border-amber-500/30 bg-zinc-900 overflow-hidden text-center shadow-2xl shadow-amber-500/10"
+5407:                        <Crown size={64} className="text-zinc-950" />
+5414:                        <p className="text-zinc-500 font-bold uppercase tracking-[0.3em] text-sm">La prueba definitiva para un Maestro Pokémon</p>
+5430:                        className="group relative px-12 py-6 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-2xl uppercase italic rounded-[32px] transition-all hover:scale-105 active:scale-95 shadow-xl shadow-amber-500/20"
+5455:                  <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Participa en eventos especiales para recompensas únicas</p>
+5468:                <div className="p-12 rounded-[40px] bg-zinc-900 border border-white/5 text-center space-y-4">
+5471:                  <p className="text-zinc-500 max-w-md mx-auto">Vuelve pronto para participar en nuevos desafíos y conseguir Pokémon legendarios.</p>
+5477:                    <div className={`p-8 md:p-12 rounded-[48px] border-2 ${activeEvent.color} bg-zinc-900 relative overflow-hidden group shadow-2xl shadow-amber-500/20`}>
+5486:                            <span className="text-zinc-500 text-xs font-bold uppercase tracking-widest">ID: {activeEvent.id}</span>
+5491:                          <p className="text-xl text-zinc-400 font-medium leading-relaxed max-w-2xl">
+5503:                                <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Bonus de Oro</div>
+5514:                                <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Probabilidad Shiny</div>
+5525:                                <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Potenciación Tipo</div>
+5539:                                : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+5545:                          <p className="mt-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-center md:text-left">
+5564:                          className={`p-6 rounded-[32px] border transition-all ${m.claimed ? 'bg-zinc-900/30 border-white/5 opacity-60' : 'bg-gradient-to-br from-zinc-900 to-zinc-800 border-white/10 hover:border-white/20 shadow-xl'}`}
+5569:                              <p className="text-xs text-zinc-500 font-medium leading-relaxed">{m.description}</p>
+5573:                              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Progreso</div>
+5601:                                className="px-6 py-2 bg-white text-black font-black uppercase tracking-widest text-[10px] rounded-full hover:bg-zinc-200 transition-all shadow-lg shadow-white/10"
+5616:                          <p className="text-zinc-500 text-sm font-medium italic">No hay misiones específicas para este evento.</p>
+5637:                  <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Completa desafíos para obtener recompensas legendarias</p>
+5672:                          className={`p-6 rounded-[32px] border transition-all ${m.claimed ? 'bg-zinc-900/30 border-white/5 opacity-60' : 'bg-gradient-to-br from-zinc-900 to-zinc-800 border-white/10 hover:border-white/20 shadow-xl'}`}
+5677:                              <p className="text-xs text-zinc-500 font-medium leading-relaxed">{m.description}</p>
+5681:                              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Progreso</div>
+5709:                                className="px-6 py-2 bg-white text-black font-black uppercase tracking-widest text-[10px] rounded-full hover:bg-zinc-200 transition-all shadow-lg shadow-white/10"
+5741:                <p className="text-zinc-400 max-w-lg mx-auto">Recluta nuevos talentos para tu equipo y adquiere recursos esenciales para la aventura.</p>
+5758:                        default: return 'from-zinc-500 to-zinc-700';
+5767:                        className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 flex items-center gap-8 group hover:border-white/20 transition-all relative overflow-hidden shadow-xl"
+5779:                            <p className="text-zinc-400 text-sm mt-2 font-medium leading-relaxed">{pack.description}</p>
+5785:                            <span className="text-xs uppercase tracking-widest text-zinc-500">Polvos</span>
+5791:                            className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${canAfford ? 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+5814:                        case 'standard': return 'from-zinc-500 to-zinc-700';
+5819:                        default: return 'from-zinc-500 to-zinc-700';
+5828:                        className="bg-zinc-900 border border-white/5 rounded-[32px] p-6 flex flex-col items-center text-center space-y-6 group hover:border-white/20 transition-all relative overflow-hidden shadow-xl"
+5840:                            <p className="text-zinc-400 text-[10px] mt-2 font-medium leading-relaxed h-10 flex items-center justify-center">{pack.description}</p>
+5847:                              <span className="text-[10px] uppercase tracking-widest text-zinc-500">Monedas</span>
+5853:                              className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${canAfford ? 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+5867:                <div className="text-sm text-zinc-400 leading-relaxed">
+5880:                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 flex flex-col items-center text-center space-y-6 group hover:border-amber-500/50 transition-all">
+5886:                      <p className="text-zinc-500 text-xs mt-2">Recarga tu energía para seguir jugando.</p>
+5898:                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${coins >= 500 && energy < 100 ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+5904:                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 flex flex-col items-center text-center space-y-6 group hover:border-amber-500/50 transition-all">
+5910:                      <p className="text-zinc-500 text-xs mt-2">Gran recarga de energía.</p>
+5922:                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${coins >= 4500 && energy < 100 ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+5928:                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 flex flex-col items-center text-center space-y-6 group hover:border-emerald-500/50 transition-all">
+5934:                      <p className="text-zinc-500 text-xs mt-2">Reduce la fatiga de tus Pokémon instantáneamente.</p>
+5946:                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${coins >= 300 ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+5968:                <p className="text-zinc-400 max-w-lg mx-auto">Compra Pokémon de otros equipos. Las ofertas se actualizan periódicamente.</p>
+5978:                    <div key={offer.id} className="bg-zinc-900 border border-white/5 rounded-3xl p-6 flex flex-col items-center text-center space-y-6 group hover:border-emerald-500/50 transition-all relative overflow-hidden">
+5983:                        <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500">LVL {p.level}</div>
+5986:                      <div className="relative z-10 text-xs font-bold text-zinc-400 uppercase tracking-widest">
+6001:                        <div className="text-sm font-bold text-zinc-400 uppercase tracking-widest">{p.ovr} PWR</div>
+6009:                          className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${canAfford ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+6018:                  <div className="col-span-full py-12 text-center text-zinc-500 font-bold uppercase tracking-widest">
+6038:                <p className="text-zinc-400 max-w-lg mx-auto">Mejora tu club para obtener beneficios permanentes en entrenamiento, salud y reclutamiento.</p>
+6047:                    <div key={facility.id} className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 space-y-6 group hover:border-indigo-500/50 transition-all relative overflow-hidden">
+6062:                      <p className="text-zinc-500 text-sm leading-relaxed relative z-10">{facility.description}</p>
+6068:                              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Coste Mejora</div>
+6076:                              className={`px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all ${canAfford ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+6106:                <p className="text-zinc-400 max-w-lg mx-auto">Contrata especialistas para potenciar diferentes áreas de tu club.</p>
+6114:                    <div key={member.id} className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 space-y-6 group hover:border-rose-500/50 transition-all relative overflow-hidden text-center">
+6128:                      <p className="relative z-10 text-zinc-500 text-xs leading-relaxed min-h-[40px]">{member.description}</p>
+6139:                              className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all ${canAfford ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+6166:              <div className="bg-zinc-900 border border-white/5 rounded-[32px] p-6 overflow-hidden">
+6168:                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
+6191:                              ? 'bg-zinc-800/50 border-white/10' 
+6197:                            isCurrent ? 'bg-white animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.8)]' : isUnlocked ? 'bg-indigo-400' : 'bg-zinc-700'
+6200:                            <span className={`text-[10px] font-black uppercase tracking-widest ${isCurrent ? 'text-white' : 'text-zinc-400'}`}>
+6216:                <div className="lg:col-span-2 bg-zinc-900 border border-white/5 rounded-3xl p-8 space-y-6">
+6221:                    <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Semana {currentWeek} / 15</div>
+6226:                        <tr className="text-[10px] font-bold text-zinc-500 uppercase border-b border-white/5">
+6238:                            <td className="py-4 font-bold text-zinc-500">{i + 1}</td>
+6242:                              <span className="text-[10px] text-zinc-500 ml-2">({t.id === 'player' ? teamOvr : t.ovr} PWR)</span>
+6246:                            <td className="py-4 text-center text-zinc-400">{t.goalsFor}</td>
+6247:                            <td className="py-4 text-center text-zinc-400">{t.goalsAgainst}</td>
+6257:                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 space-y-6">
+6258:                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2 flex items-center justify-between">
+6299:                                  className="py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-[10px] font-black uppercase transition-all"
+6329:                          className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-500 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
+6347:                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 space-y-4">
+6348:                    <h3 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest border-b border-white/5 pb-2">Resultados Recientes</h3>
+6355:                            <span className="text-zinc-500 font-bold">Sem {m.week}</span>
+6361:                              <span className="font-black italic text-zinc-300">{m.homeScore} - {m.awayScore}</span>
+6371:                        <div className="text-center py-8 text-zinc-600 text-[10px] uppercase font-black">No hay resultados aún</div>
+6376:                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 grid grid-cols-2 gap-4">
+6378:                      <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Partidos</span>
+6382:                      <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Nivel Liga</span>
+6396:                    className="fixed inset-0 z-[150] bg-zinc-950/95 backdrop-blur-md overflow-y-auto custom-scrollbar flex flex-col items-center justify-start min-h-screen p-4 md:p-6 text-center"
+6408:                        <p className="text-zinc-400 text-sm">Los 8 mejores equipos se enfrentan en una eliminación directa por la gloria máxima.</p>
+6414:                          <h3 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Cuartos de Final</h3>
+6417:                                <div key={m.id} className="bg-zinc-900 border border-white/10 rounded-2xl p-3 space-y-2">
+6423:                                    <span className="text-zinc-600 shrink-0">VS</span>
+6435:                                    className="w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white rounded-lg text-[9px] font-black uppercase"
+6447:                          <h3 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Semifinales</h3>
+6451:                                <div key={m.id} className="bg-zinc-900 border border-white/10 rounded-2xl p-4 space-y-3">
+6457:                                    <span className="text-zinc-600 shrink-0">VS</span>
+6477:                              <div className="h-24 border-2 border-dashed border-white/5 rounded-2xl flex items-center justify-center text-zinc-700 text-[9px] font-black uppercase">Esperando Cuartos</div>
+6484:                          <h3 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Gran Final</h3>
+6486:                            <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-2xl p-6 space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.1)]">
+6492:                                <span className="text-zinc-600 shrink-0">VS</span>
+6511:                            <div className="h-32 border-2 border-dashed border-white/5 rounded-2xl flex items-center justify-center text-zinc-700 text-[10px] font-black uppercase">Esperando Semis</div>
+6517:                          <h3 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Campeón</h3>
+6529:                            <div className="h-32 border-2 border-dashed border-white/5 rounded-2xl flex items-center justify-center text-zinc-700 text-[10px] font-black uppercase">Por Definir</div>
+6577:                <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+6587:                    <p className="text-[10px] text-zinc-500">Intercambia monedas por TP para acelerar el crecimiento.</p>
+6597:                      className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all ${coins >= 500 ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-600'}`}
+6603:                    <h3 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Tu Colección</h3>
+6616:                        className={`p-3 rounded-2xl border transition-all flex items-center gap-3 ${selectedLabPokemonId === p.instanceId ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 border-white/5 hover:bg-zinc-800'}`}
+6625:                          <div className={`text-[10px] font-black uppercase italic truncate ${selectedLabPokemonId === p.instanceId ? 'text-white' : 'text-zinc-300'}`}>{p.name}</div>
+6627:                            <div className={`text-[8px] font-bold uppercase ${selectedLabPokemonId === p.instanceId ? 'text-indigo-200' : 'text-zinc-500'}`}>PWR {p.ovr}</div>
+6648:                        <div className="bg-zinc-900 border border-white/5 rounded-[40px] p-8 lg:p-12 grid grid-cols-1 md:grid-cols-2 gap-12 relative overflow-hidden">
+6682:                                <div className="text-[8px] font-bold text-zinc-500 uppercase mb-1">Ataque</div>
+6686:                                <div className="text-[8px] font-bold text-zinc-500 uppercase mb-1">Defensa</div>
+6690:                                <div className="text-[8px] font-bold text-zinc-500 uppercase mb-1">Velocidad</div>
+6703:                                  <span key={t} className="px-3 py-1 bg-white/5 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/5 text-zinc-400">{t}</span>
+6716:                                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Nivel {p.powerLevel} / 10</div>
+6718:                                  <div className="text-[10px] font-black text-zinc-400 uppercase">Coste: {POWERUP_COST_BASE} Polvos</div>
+6730:                                  className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${canPowerUp && p.powerLevel < 10 ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+6742:                                  <div className="text-[10px] font-black text-zinc-500 uppercase">Coste Cambio: 100 TP</div>
+6752:                                        className={`p-3 rounded-xl border text-left transition-all relative overflow-hidden group ${moveSlotToReplace === idx ? 'bg-indigo-600 border-indigo-500' : 'bg-black/40 border-white/5 hover:bg-zinc-800'}`}
+6765:                                            <span className="text-[10px] font-black uppercase text-zinc-500">+ Aprender</span>
+6790:                                            <div className="text-[8px] font-bold text-zinc-500 uppercase">Consultando PokeAPI...</div>
+6801:                                                  className={`p-3 rounded-xl bg-zinc-800/50 border border-white/5 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all text-left flex justify-between items-center group ${(!isUnlocked || tp < 100 || moveSlotToReplace === null) ? 'opacity-50 cursor-not-allowed' : ''}`}
+6806:                                                      {!isUnlocked && <Lock size={8} className="text-zinc-500" />}
+6812:                                                    <div className="text-[8px] font-bold text-zinc-500 uppercase">100 TP</div>
+6832:                                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Nivel {p.level} / {p.maxLevel}</div>
+6834:                                  <div className="text-[10px] font-black text-zinc-400 uppercase">Coste: {TRAINING_COST_BASE} TP</div>
+6846:                                  className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${canTrain && p.level < p.maxLevel ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+6861:                                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${(coins >= LIMIT_BREAK_COST_COINS && stardust >= LIMIT_BREAK_COST_STARDUST) ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-xl shadow-rose-500/20 animate-pulse' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+6865:                                    <div className="flex justify-between text-[8px] font-black uppercase text-zinc-500 px-2">
+6869:                                    <p className="text-[9px] text-center text-zinc-400 font-medium italic">Desbloquea el potencial para llegar al Nivel 50</p>
+6880:                                    className={`w-full py-6 rounded-3xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${canEvolve ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-2xl shadow-rose-500/40 animate-pulse' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+6884:                                  <div className="text-center mt-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Coste: {EVOLUTION_COST} Monedas</div>
+6897:                                  <p className="text-[10px] text-center text-zinc-500 mt-2 font-bold uppercase italic">Retira a tu leyenda para obtener recompensas masivas</p>
+6916:                    <div className="h-full min-h-[500px] bg-zinc-900/50 border-2 border-dashed border-white/5 rounded-[40px] flex flex-col items-center justify-center text-center p-12 space-y-4">
+6917:                      <div className="w-20 h-20 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-600">
+6921:                        <h3 className="text-xl font-black uppercase italic text-zinc-400">Selecciona un Pokémon</h3>
+6922:                        <p className="text-zinc-600 text-sm max-w-xs">Elige un Pokémon de tu colección en el panel lateral para comenzar su proceso de mejora.</p>
+6941:                <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+6953:                      className={`aspect-square rounded-2xl sm:rounded-3xl border flex flex-col items-center justify-center p-2 sm:p-4 transition-all cursor-pointer hover:scale-105 ${isUnlocked ? 'bg-zinc-900 border-white/10 hover:bg-zinc-800 hover:border-white/20' : 'bg-zinc-900/40 border-white/5 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
+6955:                      <div className="text-[8px] sm:text-[10px] font-bold text-zinc-600 mb-1 sm:mb-2">#{p.id.toString().padStart(3, '0')}</div>
+6967:                          <Lock size={10} className="text-zinc-500" />
+6989:                <p className="text-zinc-400 max-w-2xl mx-auto text-lg">
+7003:                      className="bg-zinc-900 border-2 border-amber-500/30 rounded-[40px] p-8 relative overflow-hidden group"
+7024:                          <div className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Poder Final</div>
+7028:                          <div className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Combates</div>
+7034:                        <div className="text-[10px] font-black uppercase text-zinc-500 flex items-center gap-2">
+7039:                            <span className="text-zinc-400 uppercase tracking-widest">MVP de Liga</span>
+7043:                            <span className="text-zinc-400 uppercase tracking-widest">Daño Total</span>
+7058:                <div className="bg-zinc-900/50 border-2 border-dashed border-white/5 rounded-[40px] p-20 flex flex-col items-center justify-center text-center space-y-6">
+7059:                  <div className="w-32 h-32 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-600">
+7063:                    <h3 className="text-2xl font-black uppercase italic text-zinc-400">El Salón está vacío</h3>
+7064:                    <p className="text-zinc-500 max-w-md mx-auto">
+7083:                  <Settings className="text-zinc-400" /> Ajustes del Sistema
+7089:                <div className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 space-y-6">
+7095:                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Nombre del Equipo</label>
+7104:                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Símbolo del Equipo</label>
+7121:                <div className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 space-y-6">
+7129:                        <div className="text-[10px] text-zinc-500 font-bold uppercase">Afecta a la rapidez de las animaciones en combate</div>
+7136:                            className={`w-10 h-10 rounded-lg text-xs font-black transition-all ${globalBattleSpeed === s ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'}`}
+7147:                        <div className="text-[10px] text-zinc-500 font-bold uppercase">Borra el registro de noticias recientes</div>
+7153:                        className="px-4 py-2 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 rounded-xl text-xs font-black uppercase transition-all"
+7162:                <div className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 space-y-6">
+7170:                      <div className="text-[8px] font-bold text-zinc-500 uppercase">Monedas</div>
+7175:                      <div className="text-[8px] font-bold text-zinc-500 uppercase">Energía</div>
+7180:                      <div className="text-[8px] font-bold text-zinc-500 uppercase">TP</div>
+7185:                      <div className="text-[8px] font-bold text-zinc-500 uppercase">Polvos</div>
+7190:                      <div className="text-[8px] font-bold text-zinc-500 uppercase">Banditas</div>
+7196:                <div className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 space-y-6">
+7202:                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Paleta de Colores</label>
+7205:                          { id: 'zinc', name: 'Zinc (Default)', color: 'bg-zinc-900' },
+7228:                <div className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 space-y-6">
+7238:                        <Volume2 className={audioEnabled ? 'text-blue-400' : 'text-zinc-500'} size={20} />
+7241:                          <div className="text-[8px] text-zinc-500 font-bold uppercase">{audioEnabled ? 'Activado' : 'Desactivado'}</div>
+7244:                      <div className={`w-10 h-5 rounded-full p-1 transition-colors ${audioEnabled ? 'bg-blue-500' : 'bg-zinc-700'}`}>
+7254:                        <Bell className={notificationsEnabled ? 'text-amber-400' : 'text-zinc-500'} size={20} />
+7257:                          <div className="text-[8px] text-zinc-500 font-bold uppercase">{notificationsEnabled ? 'Activado' : 'Desactivado'}</div>
+7260:                      <div className={`w-10 h-5 rounded-full p-1 transition-colors ${notificationsEnabled ? 'bg-amber-500' : 'bg-zinc-700'}`}>
+7268:                <div className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 space-y-6">
+7275:                      <div className="text-[10px] text-zinc-500 font-bold uppercase">Selecciona tu idioma preferido</div>
+7277:                    <select className="bg-zinc-800 text-white rounded-xl px-4 py-2 text-xs font-black uppercase border-none focus:ring-2 focus:ring-emerald-500">
+7286:                <div className="bg-zinc-900 border border-rose-500/20 rounded-[32px] p-8 space-y-6">
+7293:                      <p className="text-[10px] text-zinc-500 uppercase font-bold">Esta acción borrará permanentemente todo tu progreso, incluyendo Pokémon, monedas y nivel de liga. No se puede deshacer.</p>
+7314:        <nav className="lg:hidden h-20 border-t border-white/5 bg-zinc-900/80 backdrop-blur-xl fixed bottom-0 w-full px-4 flex items-center justify-center z-50">
+7315:          <div className="flex items-center gap-1 bg-zinc-800/50 p-1 rounded-2xl border border-white/5 overflow-x-auto no-scrollbar max-w-full">
+7329:                  activeTab === tab.id ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/20' : 'text-zinc-500'
+7355:                className="relative bg-zinc-900 border border-indigo-500/30 p-8 rounded-[32px] max-w-4xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl space-y-6"
+7361:                  <button onClick={() => setShowBatchTraining(false)} className="text-zinc-500 hover:text-white">
+7369:                      <div className="text-sm font-bold text-zinc-400 uppercase">Selecciona Pokémon ({batchSelectedPokemon.length})</div>
+7395:                          className={`relative cursor-pointer rounded-2xl border-2 p-2 transition-all ${batchSelectedPokemon.includes(p.instanceId) ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5 bg-zinc-800/50 hover:border-white/20'}`}
+7401:                              <div className="text-[10px] font-bold text-zinc-500 uppercase">Nivel {p.level}/{p.maxLevel}</div>
+7412:                        <div className="col-span-full text-center py-8 text-zinc-500 text-sm font-bold uppercase">
+7421:                      <h4 className="text-sm font-black uppercase text-zinc-400">Configuración</h4>
+7423:                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Nivel Objetivo (1-10)</label>
+7444:                      <h4 className="text-sm font-black uppercase text-zinc-400">Resumen</h4>
+7470:                                <span className="text-zinc-500">TP Necesario:</span>
+7474:                                <span className="text-zinc-500">TP a Usar:</span>
+7478:                                <span className="text-zinc-500">Monedas a Usar:</span>
+7479:                                <span className={coinsToSpend > 0 ? 'text-amber-400' : 'text-zinc-500'}>-{coinsToSpend}</span>
+7486:                              className={`w-full py-4 rounded-xl font-black uppercase tracking-widest transition-all ${batchSelectedPokemon.length > 0 && canAfford ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+7516:                className="relative bg-zinc-900 border border-rose-500/30 p-8 rounded-[32px] max-w-md w-full shadow-2xl space-y-6"
+7523:                  <p className="text-zinc-400 text-sm font-bold uppercase">
+7536:                    className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-2xl font-black uppercase tracking-widest transition-all"
+7588:                    <div className="text-xl font-black uppercase text-zinc-500">{evolvingPokemon.from.name}</div>
+7684:              className="relative bg-zinc-900 border border-indigo-500/30 p-8 rounded-[32px] max-w-md w-full shadow-2xl space-y-6"
+7691:                <p className="text-zinc-400 text-sm">
+7696:                    <span className="text-xs font-bold text-zinc-500 uppercase">Tipo</span>
+7700:                    <span className="text-xs font-bold text-zinc-500 uppercase">Poder</span>
+7704:                    <span className="text-xs font-bold text-zinc-500 uppercase">Coste</span>
+7712:                  className="flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest bg-zinc-800 hover:bg-zinc-700 transition-colors"
+7738:            className="fixed inset-0 z-[250] bg-zinc-950/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+7745:              className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col relative"
+7758:                  <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Analiza a tu rival antes de la batalla</p>
+7799:                          <div className="text-[8px] font-bold text-zinc-600 uppercase italic">Sin sinergias activas</div>
+7818:                        <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Analizando Rival...</span>
+7851:                    className="text-[10px] font-black uppercase text-zinc-500 hover:text-white transition-colors tracking-widest"
+7869:            className="fixed inset-0 z-[200] bg-zinc-950/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+7876:              className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-2xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col relative custom-scrollbar"
+7889:                  <div className="text-[14px] font-black text-zinc-500 tracking-widest">#{selectedPokedexPokemon.id.toString().padStart(3, '0')}</div>
+7911:                    <span key={t} className="px-4 py-1.5 bg-white/5 rounded-full text-xs font-black uppercase tracking-widest border border-white/10 text-zinc-300">
+7920:                      <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Tipo de Carta</div>
+7926:                      <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Habilidad</div>
+7932:                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Descripción</div>
+7938:                      <div className="text-sm text-zinc-400 leading-relaxed italic">
+7945:                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Estadísticas Base</div>
+7953:                          <span className="text-[10px] font-bold text-zinc-500 uppercase">HP</span>
+7957:                          <span className="text-[10px] font-bold text-zinc-500 uppercase">ATK</span>
+7961:                          <span className="text-[10px] font-bold text-zinc-500 uppercase">DEF</span>
+7965:                          <span className="text-[10px] font-bold text-zinc-500 uppercase">SPE</span>
+7970:                      <div className="text-xs text-zinc-600">No hay estadísticas disponibles.</div>
+7976:                      <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Línea Evolutiva</div>
+7991:                                <ChevronRight size={16} className="text-zinc-600" />
+8002:              <div className="p-4 bg-zinc-950 border-t border-white/10 relative z-10">
+8005:                  className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl font-black uppercase tracking-widest transition-all text-sm"
+8028:              className="bg-zinc-900 border border-white/10 rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
+8030:              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-zinc-900/50">
+8037:                    <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Información del sistema de liga y contrastes</p>
+8044:                  <X size={24} className="text-zinc-400" />
+8059:                            i < 3 ? 'bg-zinc-500' : i < 6 ? 'bg-indigo-500' : 'bg-amber-500'
+8064:                          <div className="text-[9px] font-bold text-zinc-500 uppercase">Divisiones</div>
+8083:                      <div className="p-6 bg-zinc-950 rounded-3xl border border-white/5 space-y-4">
+8084:                        <div className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Fondo: Zinc 950</div>
+8087:                          <p className="text-zinc-300">Texto Zinc 300 (Medium Contrast)</p>
+8088:                          <p className="text-zinc-500 italic">Texto Zinc 500 (Low Contrast / Meta)</p>
+8089:                          <p className="text-zinc-700 font-black uppercase tracking-tighter">Texto Zinc 700 (Disabled/Background)</p>
+8100:                    <div className="bg-zinc-800/50 rounded-3xl p-8 border border-white/5 flex flex-col justify-center items-center text-center space-y-4">
+8105:                      <p className="text-zinc-400 text-sm leading-relaxed">
+8109:                        <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10" />
+8164:                <p className="text-zinc-400 text-lg leading-relaxed">
+8169:                    <div className="text-[10px] font-bold text-zinc-500 uppercase">Temporada</div>
+8173:                    <div className="text-[10px] font-bold text-zinc-500 uppercase">Siguiente</div>
+8196:            className="fixed inset-0 z-[200] bg-zinc-950/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+8203:              className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-5xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col relative"
+8248:                          <span key={t} className="px-3 py-1 bg-white/5 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/5 text-zinc-400">{t}</span>
+8268:                      <div className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Ataque</div>
+8272:                      <div className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Defensa</div>
+8276:                      <div className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Velocidad</div>
+8284:                      <h3 className="text-xs font-black uppercase text-zinc-500 flex items-center gap-2">
+8289:                          <div className="flex justify-between text-[10px] font-bold text-zinc-400 uppercase mb-1">
+8293:                          <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+8299:                            <div className="flex justify-between text-[9px] font-bold text-zinc-500 uppercase mb-1">
+8303:                            <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+8308:                            <div className="flex justify-between text-[9px] font-bold text-zinc-500 uppercase mb-1">
+8312:                            <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+8321:                      <h3 className="text-xs font-black uppercase text-zinc-500 flex items-center gap-2">
+8326:                          <div className="flex justify-between text-[10px] font-bold text-zinc-400 uppercase mb-1">
+8330:                          <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+8335:                          <span className="text-[10px] font-bold text-zinc-500 uppercase">Habilidad</span>
+8345:                      <h3 className="text-xs font-black uppercase text-zinc-500 flex items-center gap-2">
+8350:                          <div className="text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Partidos</div>
+8354:                          <div className="text-[9px] font-bold text-zinc-500 uppercase mb-0.5">MVPs</div>
+8358:                          <div className="text-[9px] font-bold text-zinc-500 uppercase mb-0.5">Daño Total Repartido</div>
+8365:                      <h3 className="text-xs font-black uppercase text-zinc-500 flex items-center gap-2">
+8373:                              <span className="text-[8px] font-bold text-zinc-500 uppercase">{m?.type || 'Normal'}</span>
+8379:                          <div className="text-[10px] text-zinc-500 italic text-center py-2">Sin movimientos</div>
+8387:                    <h3 className="text-xs font-black uppercase text-zinc-500 flex items-center gap-2">
+8396:                              <span className="text-zinc-500">{new Date(h.date).toLocaleDateString()}</span>
+8402:                              <div className="text-zinc-500">{h.damageDealt} Daño • {h.fainted ? 'Debilitado' : 'Sobrevivió'}</div>
+8407:                        <div className="text-center py-4 text-zinc-600 text-[10px] font-bold uppercase">Sin historial aún</div>
+8416:              <div className="p-4 md:p-6 bg-zinc-950 border-t border-white/10 flex flex-wrap sm:flex-nowrap gap-3">
+8419:                  className="w-full sm:flex-1 py-3 md:py-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl font-black uppercase tracking-widest transition-all text-xs md:text-sm"
+8427:                    className={`w-full sm:flex-1 py-3 md:py-4 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 text-xs md:text-sm ${banditas > 0 ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
+8457:              className="bg-zinc-900 border border-white/10 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl flex flex-col items-center text-center relative overflow-hidden"
+8466:              <div className="text-zinc-400 text-sm font-bold uppercase tracking-widest mb-8 relative z-10">
+8478:                      <div className="text-[9px] sm:text-xs text-zinc-500 font-bold">OVR {simulationState.currentMatch.homeTeam.ovr}</div>
+8481:                    <div className="flex items-center gap-1 sm:gap-3 px-2 sm:px-4 py-1 sm:py-2 bg-zinc-800 rounded-xl border border-white/10 shrink-0">
+8483:                      <span className="text-zinc-500 font-black text-sm sm:text-base">-</span>
+8492:                      <div className="text-[9px] sm:text-xs text-zinc-500 font-bold">OVR {simulationState.currentMatch.awayTeam.ovr}</div>
+8497:                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+8518:                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
+8542:              className={`bg-zinc-900 border ${celebration.type === 'win' ? 'border-emerald-500' : 'border-amber-500'} rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center`}
+8552:                className="mt-6 w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-black uppercase tracking-widest transition-all"

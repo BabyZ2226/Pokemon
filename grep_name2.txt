@@ -1,0 +1,59 @@
+767:      type: data.type?.name ? data.type.name.charAt(0).toUpperCase() + data.type.name.slice(1) : 'Normal',
+791:      if (chain.species?.name === targetName) {
+806:    const minLevel = findMinLevel(chainData.chain, speciesData.name);
+876:      m?.version_group_details?.some((v: any) => v?.move_learn_method?.name === 'level-up' && v?.level_learned_at <= targetLevel)
+881:      const aLevels = a?.version_group_details?.filter((v: any) => v?.move_learn_method?.name === 'level-up').map((v: any) => v?.level_learned_at) || [];
+882:      const bLevels = b?.version_group_details?.filter((v: any) => v?.move_learn_method?.name === 'level-up').map((v: any) => v?.level_learned_at) || [];
+907:      if (move && !pokemonMoves.find(m => m?.name === move.name)) {
+1033:          alt={pokemon.name}
+1293:      setHistory(prev => [`🛒 ¡Has comprado a ${offer.pokemon.name} en el mercado!`, ...prev].slice(0, 10));
+1303:          setHistory(prev => [`🏗️ ¡Instalación ${f.name} mejorada al nivel ${f.level + 1}!`, ...prev].slice(0, 10));
+1316:          setHistory(prev => [`🤝 ¡Has contratado a ${s.name} como ${s.role}!`, ...prev].slice(0, 10));
+1476:    setHistory(prev => [`✨ ¡${pokemon.name} ha evolucionado a ${evolvedPokemon.name}!`, ...prev].slice(0, 10));
+1498:              if (move && !pokemonMoves.find(m => m?.name === move.name)) {
+1538:          const seller = otherTeams.length > 0 ? otherTeams[Math.floor(Math.random() * otherTeams.length)].name : 'Mercader Errante';
+1570:            m?.version_group_details?.some((v: any) => v?.move_learn_method?.name === 'level-up')
+1575:            const aLevels = a?.version_group_details?.filter((v: any) => v?.move_learn_method?.name === 'level-up').map((v: any) => v?.level_learned_at) || [];
+1576:            const bLevels = b?.version_group_details?.filter((v: any) => v?.move_learn_method?.name === 'level-up').map((v: any) => v?.level_learned_at) || [];
+1585:            const levelDetail = m?.version_group_details?.find((v: any) => v?.move_learn_method?.name === 'level-up');
+1640:    setHistory([`¡Comienza tu Aventura! Has elegido a ${starter.name} como tu compañero inicial.`]);
+1783:        setHistory(h => [`💰 ¡Sponsor ${prev.name} completado! Recompensa recibida.`, ...h].slice(0, 10));
+1824:      setHistory(prev => [`✨ ¡Has reclutado a ${newPokemon.name} (${rarity})!`, ...prev].slice(0, 10));
+1863:    setHistory(h => [`🏆 ¡${target.name} ha entrado en el Salón de la Fama! Recompensa: +15,000 Monedas, +5,000 Polvos.`, ...h].slice(0, 10));
+1948:    setHistory(prev => [`🩹 Has usado una Bandita en ${target.name}.`, ...prev].slice(0, 10));
+2004:    setHistory(prev => [`¡LÍMITE SUPERADO! ${target.name} ahora puede entrenar hasta nivel 50.`, ...prev].slice(0, 10));
+2042:    setHistory(h => [`💰 Has vendido a ${p.name} por ${sellPrice} Monedas y recuperado ${energyGain} de Energía.`, ...h].slice(0, 10));
+2059:    setHistory(h => [`🛒 Has comprado a ${offer.pokemon.name} en el mercado por ${offer.cost} Monedas.`, ...h].slice(0, 10));
+2174:      setHistory(prev => [`❌ ${pokemon.name} está lesionado y no puede jugar.`, ...prev].slice(0, 10));
+2253:      rivalName: rivalTeamInfo?.name || 'Rival',
+2273:      log: [`¡Comienza el combate contra ${rivalTeamInfo?.name || 'Rival'} (Poder ${rivalOvr})!`],
+2476:              setHistory(h => [`✅ ¡${p.name} se ha recuperado de su lesión!`, ...h].slice(0, 10));
+2486:                setHistory(h => [`⚠️ ¡${p.name} se ha lesionado por ${injuryWeeks} semanas!`, ...h].slice(0, 10));
+2723:      log = `¡${attacker.p.name} activó ${ability}! El ataque aumentó.`;
+2726:      log = `¡${attacker.p.name} activó Adaptabilidad!`;
+2731:      log = `¡La Electricidad Estática de ${attacker.p.name} causó daño extra!`;
+2738:      log = `¡${defender.p.name} levita! El daño de Tierra se redujo.`;
+2766:      console.error("No move selected and no moves available for attacker", attacker.p.name);
+2843:      `¡${attacker.p.name} usó ${selectedMove.name}!`,
+2844:      `${defender.p.name || 'Pokémon'} recibió ${finalDamage} de daño.${multiplier > 1 ? ' ¡Es muy eficaz!' : multiplier < 1 ? ' No es muy eficaz...' : ''}`
+2883:        next.log = [`¡${defender.p?.name || 'Pokémon'} se ha debilitado!`, ...next.log].slice(0, 5);
+2935:            setHistory(h => [`✅ ¡${p.name} se ha recuperado de su lesión!`, ...h].slice(0, 10));
+2947:              setHistory(h => [`⚠️ ¡${p.name} se ha lesionado por ${injuryWeeks} semanas!`, ...h].slice(0, 10));
+2960:                opponent: battleData.rivalTeam[0]?.p?.name || 'Rival',
+3474:                            alt={base.name}
+3737:                              <span>{move?.name || 'Ataque'}</span>
+3762:                                    log: [`¡Adelante ${member.p.name}!`, ...prev.log]
+4613:                          alt={p.name}
+4681:                              {t.id === 'player' ? teamName : t.name} 
+4717:                                <span>{m.homeTeamId === 'player' ? teamName : home?.name}</span>
+4725:                                <span>{m.awayTeamId === 'player' ? teamName : away?.name}</span>
+4790:                                <span>{m.homeTeamId === 'player' ? teamName : home?.name}</span>
+4796:                                <span>{m.awayTeamId === 'player' ? teamName : away?.name}</span>
+5084:                                alt={p.name}
+5221:                                            {learnableMoves.filter(lm => !p.moves.some(pm => pm?.name === lm?.name)).map((lm, i) => {
+5232:                                                      {lm?.name || 'Ataque'}
+5390:                        {isUnlocked ? p.name : '???'}
+5433:                            alt={p.name}
+6093:                  {selectedPokedexPokemon.name}
+6432:                        {simulationState.currentMatch.homeTeam.name}
+6446:                        {simulationState.currentMatch.awayTeam.name}

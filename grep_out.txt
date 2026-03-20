@@ -1,0 +1,21 @@
+79:interface PokemonCard extends PokemonBase {
+170:  pokemon: PokemonCard;
+822:const generatePokemon = async (base: PokemonBase, rarity: Rarity, targetLevel: number = 1, shinyMultiplier: number = 1, academyBonus: number = 0): Promise<PokemonCard> => {
+950:const PokemonCardUI = ({ 
+964:  pokemon: PokemonCard, 
+1216:  const [collection, setCollection] = useState<PokemonCard[]>(() => JSON.parse(localStorage.getItem('plm_collection') || '[]'));
+1224:  const [selectedPokemon, setSelectedPokemon] = useState<PokemonCard | null>(null);
+1276:  const [hallOfFame, setHallOfFame] = useState<PokemonCard[]>(() => JSON.parse(localStorage.getItem('plm_hallOfFame') || '[]'));
+1277:  const [nursery, setNursery] = useState<{ parents: PokemonCard[], eggProgress: number } | null>(() => JSON.parse(localStorage.getItem('plm_nursery') || 'null'));
+1279:  const [evolvingPokemon, setEvolvingPokemon] = useState<{ from: PokemonCard, to: PokemonCard } | null>(null);
+1449:  const evolvePokemon = async (pokemon: PokemonCard) => {
+1459:    const evolvedPokemon: PokemonCard = {
+1608:    playerTeam: { p: PokemonCard, hp: number, maxHp: number }[],
+1609:    rivalTeam: { p: PokemonCard, hp: number, maxHp: number }[],
+1716:    (team || []).map(id => collection?.find(p => p.instanceId === id)).filter(Boolean) as PokemonCard[],
+1790:  const [openingPack, setOpeningPack] = useState<{ pack: any, pokemon: PokemonCard | null, isRevealed: boolean } | null>(null);
+2142:    const evolvedPokemon: PokemonCard = {
+2647:        const newPokemonList: PokemonCard[] = [];
+3358:                  <PokemonCardUI 
+3969:                          <PokemonCardUI 
+4211:                        <PokemonCardUI pokemon={offer.pokemon} />

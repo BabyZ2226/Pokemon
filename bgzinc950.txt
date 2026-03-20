@@ -1,0 +1,15 @@
+1545:          <div className="h-2 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+1563:            <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+1578:            <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+1808:  const [arenaBg, setArenaBg] = useState('bg-zinc-950');
+4252:    <div data-theme={theme} className="flex h-screen bg-zinc-950 overflow-hidden font-sans selection:bg-rose-500/30 transition-colors duration-500">
+4560:              className="fixed inset-0 z-[300] bg-zinc-950 flex flex-col items-center justify-start md:justify-center p-4 md:p-8 text-center overflow-y-auto custom-scrollbar"
+4635:              className="fixed inset-0 z-[100] bg-zinc-950 flex flex-col"
+5316:                            : 'bg-zinc-950 border-white/5 opacity-60 grayscale'
+6396:                    className="fixed inset-0 z-[150] bg-zinc-950/95 backdrop-blur-md overflow-y-auto custom-scrollbar flex flex-col items-center justify-start min-h-screen p-4 md:p-6 text-center"
+7738:            className="fixed inset-0 z-[250] bg-zinc-950/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+7869:            className="fixed inset-0 z-[200] bg-zinc-950/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+8002:              <div className="p-4 bg-zinc-950 border-t border-white/10 relative z-10">
+8083:                      <div className="p-6 bg-zinc-950 rounded-3xl border border-white/5 space-y-4">
+8196:            className="fixed inset-0 z-[200] bg-zinc-950/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+8416:              <div className="p-4 md:p-6 bg-zinc-950 border-t border-white/10 flex flex-wrap sm:flex-nowrap gap-3">

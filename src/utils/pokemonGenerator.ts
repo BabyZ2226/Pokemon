@@ -127,6 +127,8 @@ async function fetchPokemonById(pokedexNumber: number, level: number, rarity: Ra
       isInjured: false,
       injuryDaysRemaining: 0,
       currentOVR: calculateOVR(baseStats, ivs, level) + (isShiny ? 10 : 0),
+      happiness: 50,
+      megaEvolved: false,
     };
   } catch (error) {
     console.error("Failed to fetch pokemon", error);

@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and progress",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "progress": { "$ref": "UserProgress" }
+      },
+      "required": ["name", "email", "progress"]
+    },
+    "UserProgress": {
+      "title": "UserProgress",
+      "description": "User game progress",
+      "type": "object",
+      "properties": {
+        "coins": { "type": "number" },
+        "badges": { "type": "array", "items": { "type": "string" } },
+        "activeTeam": { "type": "array", "items": { "$ref": "PokemonInstance" } }
+      }
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "Friend request between users",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "receiverId", "status", "createdAt"]
+    },
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User data"
+    },
+    "/users/{userId}/friends/{friendId}": {
+      "schema": { "$ref": "User" },
+      "description": "User friends"
+    },
+    "/friendRequests/{requestId}": {
+      "schema": { "$ref": "FriendRequest" },
+      "description": "Friend requests"
+    }
+  }
+}

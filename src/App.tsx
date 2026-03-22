@@ -34,6 +34,7 @@ import {
   Trash2,
   Lock,
   Check,
+  ShieldCheck,
   X,
   AlertTriangle,
   Menu,
@@ -59,6 +60,9 @@ import { ProfileMenu } from './components/ProfileMenu';
 import { auth, db, googleProvider } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+
+import { InventoryTab } from './components/InventoryTab';
+
 
 // --- Types & Constants ---
 
@@ -88,6 +92,17 @@ interface PokemonBase {
   baseStatsSum?: number;
   description?: string;
   stats?: { hp: number, atk: number, def: number, spe: number };
+  evolutionCondition?: {
+    type: 'happiness' | 'stone' | 'item' | 'trade' | 'time';
+    value?: string | number;
+  };
+  evolutions?: {
+    id: number;
+    condition: {
+      type: 'level' | 'happiness' | 'stone' | 'item' | 'trade' | 'time';
+      value?: string | number;
+    }
+  }[];
 }
 
 interface PokemonCard extends PokemonBase {
@@ -110,6 +125,7 @@ interface PokemonCard extends PokemonBase {
   isShiny: boolean;
   fatigue: number; // 0-100
   moral: number; // 0-100
+  happiness: number; // 0-255
   isInjured: boolean;
   injuryWeeks: number;
   matchesPlayed: number;
@@ -123,6 +139,8 @@ interface PokemonCard extends PokemonBase {
     date: string;
   }[];
   item?: string;
+  megaStone?: string;
+  megaEvolved?: boolean;
   moves: Move[];
   nature: string;
   ivs: { atk: number, def: number, spe: number, hp: number };
@@ -185,6 +203,7 @@ interface GameEvent {
     tpMultiplier?: number;
     energyRegenMultiplier?: number;
     typeBoost?: { type: string, boost: number };
+    evolutionDiscount?: number;
   };
   endDate: number; // timestamp
 }
@@ -264,6 +283,16 @@ interface Match {
   played: boolean;
   week: number;
 }
+
+const HELD_ITEMS = [
+  { id: 'leftovers', name: 'Restos', description: 'Recupera un poco de HP cada turno en combate.', price: 3000, effect: 'Heal 1/16 HP per turn' },
+  { id: 'life-orb', name: 'Vidasfera', description: 'Potencia el daño un 30% pero consume 10% de HP al atacar.', price: 5000, effect: '+30% Damage, -10% HP recoil' },
+  { id: 'choice-band', name: 'Cinta Elección', description: 'Aumenta el Ataque un 50%.', price: 4500, effect: '+50% ATK' },
+  { id: 'choice-scarf', name: 'Pañuelo Elección', description: 'Aumenta la Velocidad un 50%.', price: 4500, effect: '+50% SPE' },
+  { id: 'focus-sash', name: 'Banda Focus', description: 'Si tienes el HP al máximo, evita debilitarte de un golpe.', price: 2500, effect: 'Prevents OHKO' },
+  { id: 'rocky-helmet', name: 'Casco Dentado', description: 'Daña al oponente si te golpea con un ataque físico.', price: 3500, effect: 'Damage attacker on contact' },
+  { id: 'expert-belt', name: 'Cinturón Experto', description: 'Potencia los ataques súper eficaces.', price: 4000, effect: '+20% Super Effective Damage' },
+];
 
 const TYPE_CHART: Record<string, Record<string, number>> = {
   Normal: { Rock: 0.5, Ghost: 0, Steel: 0.5 },
@@ -459,7 +488,7 @@ const getRarity = (p: PokemonBase): Rarity => {
   return getPokemonRarity(p);
 };
 
-const POKEDEX_BASE: PokemonBase[] = [
+export const POKEDEX_BASE: PokemonBase[] = [
   { id: 1, name: 'Bulbasaur', types: ['Grass', 'Poison'], ability: 'Overgrow', evolutionChain: [1, 2, 3] },
   { id: 2, name: 'Ivysaur', types: ['Grass', 'Poison'], ability: 'Overgrow', evolutionChain: [1, 2, 3] },
   { id: 3, name: 'Venusaur', types: ['Grass', 'Poison'], ability: 'Overgrow', evolutionChain: [1, 2, 3] },
@@ -484,26 +513,53 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 22, name: 'Fearow', types: ['Normal', 'Flying'], ability: 'Keen Eye', evolutionChain: [21, 22] },
   { id: 23, name: 'Ekans', types: ['Poison'], ability: 'Intimidate', evolutionChain: [23, 24] },
   { id: 24, name: 'Arbok', types: ['Poison'], ability: 'Intimidate', evolutionChain: [23, 24] },
-  { id: 25, name: 'Pikachu', types: ['Electric'], ability: 'Static', evolutionChain: [25, 26] },
+  { 
+    id: 25, name: 'Pikachu', types: ['Electric'], ability: 'Static', evolutionChain: [25, 26],
+    evolutions: [{ id: 26, condition: { type: 'stone', value: 'thunder' } }]
+  },
   { id: 26, name: 'Raichu', types: ['Electric'], ability: 'Static', evolutionChain: [25, 26] },
   { id: 27, name: 'Sandshrew', types: ['Ground'], ability: 'Sand Veil', evolutionChain: [27, 28] },
   { id: 28, name: 'Sandslash', types: ['Ground'], ability: 'Sand Veil', evolutionChain: [27, 28] },
   { id: 29, name: 'Nidoran♀', types: ['Poison'], ability: 'Poison Point', evolutionChain: [29, 30, 31] },
-  { id: 30, name: 'Nidorina', types: ['Poison'], ability: 'Poison Point', evolutionChain: [29, 30, 31] },
+  { 
+    id: 30, name: 'Nidorina', types: ['Poison'], ability: 'Poison Point', evolutionChain: [29, 30, 31],
+    evolutions: [{ id: 31, condition: { type: 'stone', value: 'moon' } }]
+  },
   { id: 31, name: 'Nidoqueen', types: ['Poison', 'Ground'], ability: 'Poison Point', evolutionChain: [29, 30, 31] },
   { id: 32, name: 'Nidoran♂', types: ['Poison'], ability: 'Poison Point', evolutionChain: [32, 33, 34] },
-  { id: 33, name: 'Nidorino', types: ['Poison'], ability: 'Poison Point', evolutionChain: [32, 33, 34] },
+  { 
+    id: 33, name: 'Nidorino', types: ['Poison'], ability: 'Poison Point', evolutionChain: [32, 33, 34],
+    evolutions: [{ id: 34, condition: { type: 'stone', value: 'moon' } }]
+  },
   { id: 34, name: 'Nidoking', types: ['Poison', 'Ground'], ability: 'Poison Point', evolutionChain: [32, 33, 34] },
-  { id: 35, name: 'Clefairy', types: ['Fairy'], ability: 'Cute Charm', evolutionChain: [35, 36] },
+  { 
+    id: 35, name: 'Clefairy', types: ['Fairy'], ability: 'Cute Charm', evolutionChain: [35, 36],
+    evolutions: [{ id: 36, condition: { type: 'stone', value: 'moon' } }]
+  },
   { id: 36, name: 'Clefable', types: ['Fairy'], ability: 'Cute Charm', evolutionChain: [35, 36] },
-  { id: 37, name: 'Vulpix', types: ['Fire'], ability: 'Flash Fire', evolutionChain: [37, 38] },
+  { 
+    id: 37, name: 'Vulpix', types: ['Fire'], ability: 'Flash Fire', evolutionChain: [37, 38],
+    evolutions: [{ id: 38, condition: { type: 'stone', value: 'fire' } }]
+  },
   { id: 38, name: 'Ninetales', types: ['Fire'], ability: 'Flash Fire', evolutionChain: [37, 38] },
-  { id: 39, name: 'Jigglypuff', types: ['Normal', 'Fairy'], ability: 'Cute Charm', evolutionChain: [39, 40] },
+  { 
+    id: 39, name: 'Jigglypuff', types: ['Normal', 'Fairy'], ability: 'Cute Charm', evolutionChain: [39, 40],
+    evolutions: [{ id: 40, condition: { type: 'stone', value: 'moon' } }]
+  },
   { id: 40, name: 'Wigglytuff', types: ['Normal', 'Fairy'], ability: 'Cute Charm', evolutionChain: [39, 40] },
   { id: 41, name: 'Zubat', types: ['Poison', 'Flying'], ability: 'Inner Focus', evolutionChain: [41, 42, 169] },
-  { id: 42, name: 'Golbat', types: ['Poison', 'Flying'], ability: 'Inner Focus', evolutionChain: [41, 42, 169] },
+  { 
+    id: 42, name: 'Golbat', types: ['Poison', 'Flying'], ability: 'Inner Focus', evolutionChain: [41, 42, 169],
+    evolutions: [{ id: 169, condition: { type: 'happiness', value: 220 } }]
+  },
   { id: 43, name: 'Oddish', types: ['Grass', 'Poison'], ability: 'Chlorophyll', evolutionChain: [43, 44, 45] },
-  { id: 44, name: 'Gloom', types: ['Grass', 'Poison'], ability: 'Chlorophyll', evolutionChain: [43, 44, 45] },
+  { 
+    id: 44, name: 'Gloom', types: ['Grass', 'Poison'], ability: 'Chlorophyll', evolutionChain: [43, 44, 45, 182],
+    evolutions: [
+      { id: 45, condition: { type: 'stone', value: 'leaf' } },
+      { id: 182, condition: { type: 'stone', value: 'sun' } }
+    ]
+  },
   { id: 45, name: 'Vileplume', types: ['Grass', 'Poison'], ability: 'Chlorophyll', evolutionChain: [43, 44, 45] },
   { id: 46, name: 'Paras', types: ['Bug', 'Grass'], ability: 'Effect Spore', evolutionChain: [46, 47] },
   { id: 47, name: 'Parasect', types: ['Bug', 'Grass'], ability: 'Effect Spore', evolutionChain: [46, 47] },
@@ -517,10 +573,19 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 55, name: 'Golduck', types: ['Water'], ability: 'Damp', evolutionChain: [54, 55] },
   { id: 56, name: 'Mankey', types: ['Fighting'], ability: 'Vital Spirit', evolutionChain: [56, 57] },
   { id: 57, name: 'Primeape', types: ['Fighting'], ability: 'Vital Spirit', evolutionChain: [56, 57] },
-  { id: 58, name: 'Growlithe', types: ['Fire'], ability: 'Intimidate', evolutionChain: [58, 59] },
+  { 
+    id: 58, name: 'Growlithe', types: ['Fire'], ability: 'Intimidate', evolutionChain: [58, 59],
+    evolutions: [{ id: 59, condition: { type: 'stone', value: 'fire' } }]
+  },
   { id: 59, name: 'Arcanine', types: ['Fire'], ability: 'Intimidate', evolutionChain: [58, 59], baseStatsSum: 555 },
   { id: 60, name: 'Poliwag', types: ['Water'], ability: 'Water Absorb', evolutionChain: [60, 61, 62] },
-  { id: 61, name: 'Poliwhirl', types: ['Water'], ability: 'Water Absorb', evolutionChain: [60, 61, 62] },
+  { 
+    id: 61, name: 'Poliwhirl', types: ['Water'], ability: 'Water Absorb', evolutionChain: [60, 61, 62, 186],
+    evolutions: [
+      { id: 62, condition: { type: 'stone', value: 'water' } },
+      { id: 186, condition: { type: 'stone', value: 'sun' } }
+    ]
+  },
   { id: 62, name: 'Poliwrath', types: ['Water', 'Fighting'], ability: 'Water Absorb', evolutionChain: [60, 61, 62] },
   { id: 63, name: 'Abra', types: ['Psychic'], ability: 'Synchronize', evolutionChain: [63, 64, 65] },
   { id: 64, name: 'Kadabra', types: ['Psychic'], ability: 'Synchronize', evolutionChain: [63, 64, 65] },
@@ -538,10 +603,19 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 76, name: 'Golem', types: ['Rock', 'Ground'], ability: 'Rock Head', evolutionChain: [74, 75, 76] },
   { id: 77, name: 'Ponyta', types: ['Fire'], ability: 'Run Away', evolutionChain: [77, 78] },
   { id: 78, name: 'Rapidash', types: ['Fire'], ability: 'Run Away', evolutionChain: [77, 78] },
-  { id: 79, name: 'Slowpoke', types: ['Water', 'Psychic'], ability: 'Oblivious', evolutionChain: [79, 80] },
+  { 
+    id: 79, name: 'Slowpoke', types: ['Water', 'Psychic'], ability: 'Oblivious', evolutionChain: [79, 80, 199],
+    evolutions: [
+      { id: 80, condition: { type: 'level', value: 37 } },
+      { id: 199, condition: { type: 'stone', value: 'moon' } }
+    ]
+  },
   { id: 80, name: 'Slowbro', types: ['Water', 'Psychic'], ability: 'Oblivious', evolutionChain: [79, 80] },
   { id: 81, name: 'Magnemite', types: ['Electric', 'Steel'], ability: 'Magnet Pull', evolutionChain: [81, 82, 462] },
-  { id: 82, name: 'Magneton', types: ['Electric', 'Steel'], ability: 'Magnet Pull', evolutionChain: [81, 82, 462] },
+  { 
+    id: 82, name: 'Magneton', types: ['Electric', 'Steel'], ability: 'Magnet Pull', evolutionChain: [81, 82, 462],
+    evolutions: [{ id: 462, condition: { type: 'stone', value: 'thunder' } }]
+  },
   { id: 83, name: 'Farfetch\'d', types: ['Normal', 'Flying'], ability: 'Keen Eye', evolutionChain: [83] },
   { id: 84, name: 'Doduo', types: ['Normal', 'Flying'], ability: 'Run Away', evolutionChain: [84, 85] },
   { id: 85, name: 'Dodrio', types: ['Normal', 'Flying'], ability: 'Run Away', evolutionChain: [84, 85] },
@@ -549,12 +623,18 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 87, name: 'Dewgong', types: ['Water', 'Ice'], ability: 'Thick Fat', evolutionChain: [86, 87] },
   { id: 88, name: 'Grimer', types: ['Poison'], ability: 'Stench', evolutionChain: [88, 89] },
   { id: 89, name: 'Muk', types: ['Poison'], ability: 'Stench', evolutionChain: [88, 89] },
-  { id: 90, name: 'Shellder', types: ['Water'], ability: 'Shell Armor', evolutionChain: [90, 91] },
+  { 
+    id: 90, name: 'Shellder', types: ['Water'], ability: 'Shell Armor', evolutionChain: [90, 91],
+    evolutions: [{ id: 91, condition: { type: 'stone', value: 'water' } }]
+  },
   { id: 91, name: 'Cloyster', types: ['Water', 'Ice'], ability: 'Shell Armor', evolutionChain: [90, 91] },
   { id: 92, name: 'Gastly', types: ['Ghost', 'Poison'], ability: 'Levitate', evolutionChain: [92, 93, 94] },
   { id: 93, name: 'Haunter', types: ['Ghost', 'Poison'], ability: 'Levitate', evolutionChain: [92, 93, 94] },
   { id: 94, name: 'Gengar', types: ['Ghost', 'Poison'], ability: 'Cursed Body', evolutionChain: [92, 93, 94] },
-  { id: 95, name: 'Onix', types: ['Rock', 'Ground'], ability: 'Rock Head', evolutionChain: [95, 208] },
+  { 
+    id: 95, name: 'Onix', types: ['Rock', 'Ground'], ability: 'Rock Head', evolutionChain: [95, 208],
+    evolutions: [{ id: 208, condition: { type: 'stone', value: 'shiny' } }]
+  },
   { id: 96, name: 'Drowzee', types: ['Psychic'], ability: 'Insomnia', evolutionChain: [96, 97] },
   { id: 97, name: 'Hypno', types: ['Psychic'], ability: 'Insomnia', evolutionChain: [96, 97] },
   { id: 98, name: 'Krabby', types: ['Water'], ability: 'Hyper Cutter', evolutionChain: [98, 99] },
@@ -571,32 +651,71 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 109, name: 'Koffing', types: ['Poison'], ability: 'Levitate', evolutionChain: [109, 110] },
   { id: 110, name: 'Weezing', types: ['Poison'], ability: 'Levitate', evolutionChain: [109, 110] },
   { id: 111, name: 'Rhyhorn', types: ['Ground', 'Rock'], ability: 'Lightning Rod', evolutionChain: [111, 112, 464] },
-  { id: 112, name: 'Rhydon', types: ['Ground', 'Rock'], ability: 'Lightning Rod', evolutionChain: [111, 112, 464] },
-  { id: 113, name: 'Chansey', types: ['Normal'], ability: 'Natural Cure', evolutionChain: [440, 113, 242] },
-  { id: 114, name: 'Tangela', types: ['Grass'], ability: 'Chlorophyll', evolutionChain: [114, 465] },
+  { 
+    id: 112, name: 'Rhydon', types: ['Ground', 'Rock'], ability: 'Lightning Rod', evolutionChain: [111, 112, 464],
+    evolutions: [{ id: 464, condition: { type: 'stone', value: 'moon' } }]
+  },
+  { 
+    id: 113, name: 'Chansey', types: ['Normal'], ability: 'Natural Cure', evolutionChain: [440, 113, 242],
+    evolutions: [{ id: 242, condition: { type: 'happiness', value: 220 } }]
+  },
+  { 
+    id: 114, name: 'Tangela', types: ['Grass'], ability: 'Chlorophyll', evolutionChain: [114, 465],
+    evolutions: [{ id: 465, condition: { type: 'stone', value: 'leaf' } }]
+  },
   { id: 115, name: 'Kangaskhan', types: ['Normal'], ability: 'Early Bird', evolutionChain: [115] },
   { id: 116, name: 'Horsea', types: ['Water'], ability: 'Swift Swim', evolutionChain: [116, 117, 230] },
-  { id: 117, name: 'Seadra', types: ['Water'], ability: 'Poison Point', evolutionChain: [116, 117, 230] },
+  { 
+    id: 117, name: 'Seadra', types: ['Water'], ability: 'Poison Point', evolutionChain: [116, 117, 230],
+    evolutions: [{ id: 230, condition: { type: 'stone', value: 'water' } }]
+  },
   { id: 118, name: 'Goldeen', types: ['Water'], ability: 'Swift Swim', evolutionChain: [118, 119] },
   { id: 119, name: 'Seaking', types: ['Water'], ability: 'Swift Swim', evolutionChain: [118, 119] },
-  { id: 120, name: 'Staryu', types: ['Water'], ability: 'Illuminate', evolutionChain: [120, 121] },
+  { 
+    id: 120, name: 'Staryu', types: ['Water'], ability: 'Illuminate', evolutionChain: [120, 121],
+    evolutions: [{ id: 121, condition: { type: 'stone', value: 'water' } }]
+  },
   { id: 121, name: 'Starmie', types: ['Water', 'Psychic'], ability: 'Illuminate', evolutionChain: [120, 121] },
   { id: 122, name: 'Mr. Mime', types: ['Psychic', 'Fairy'], ability: 'Soundproof', evolutionChain: [439, 122] },
-  { id: 123, name: 'Scyther', types: ['Bug', 'Flying'], ability: 'Swarm', evolutionChain: [123, 212] },
+  { 
+    id: 123, name: 'Scyther', types: ['Bug', 'Flying'], ability: 'Swarm', evolutionChain: [123, 212],
+    evolutions: [{ id: 212, condition: { type: 'stone', value: 'shiny' } }]
+  },
   { id: 124, name: 'Jynx', types: ['Ice', 'Psychic'], ability: 'Oblivious', evolutionChain: [238, 124] },
-  { id: 125, name: 'Electabuzz', types: ['Electric'], ability: 'Static', evolutionChain: [239, 125, 466] },
-  { id: 126, name: 'Magmar', types: ['Fire'], ability: 'Flame Body', evolutionChain: [240, 126, 467] },
+  { 
+    id: 125, name: 'Electabuzz', types: ['Electric'], ability: 'Static', evolutionChain: [239, 125, 466],
+    evolutions: [{ id: 466, condition: { type: 'stone', value: 'thunder' } }]
+  },
+  { 
+    id: 126, name: 'Magmar', types: ['Fire'], ability: 'Flame Body', evolutionChain: [240, 126, 467],
+    evolutions: [{ id: 467, condition: { type: 'stone', value: 'fire' } }]
+  },
   { id: 127, name: 'Pinsir', types: ['Bug'], ability: 'Hyper Cutter', evolutionChain: [127] },
   { id: 128, name: 'Tauros', types: ['Normal'], ability: 'Intimidate', evolutionChain: [128] },
   { id: 129, name: 'Magikarp', types: ['Water'], ability: 'Swift Swim', evolutionChain: [129, 130] },
   { id: 130, name: 'Gyarados', types: ['Water', 'Flying'], ability: 'Intimidate', evolutionChain: [129, 130], baseStatsSum: 540 },
   { id: 131, name: 'Lapras', types: ['Water', 'Ice'], ability: 'Water Absorb', evolutionChain: [131], baseStatsSum: 535 },
   { id: 132, name: 'Ditto', types: ['Normal'], ability: 'Limber', evolutionChain: [132] },
-  { id: 133, name: 'Eevee', types: ['Normal'], ability: 'Run Away', evolutionChain: [133, 134, 135, 136, 196, 197, 470, 471, 700] },
+  { 
+    id: 133, name: 'Eevee', types: ['Normal'], ability: 'Run Away', evolutionChain: [133, 134, 135, 136, 196, 197, 470, 471, 700],
+    evolutions: [
+      { id: 134, condition: { type: 'stone', value: 'water' } },
+      { id: 135, condition: { type: 'stone', value: 'thunder' } },
+      { id: 136, condition: { type: 'stone', value: 'fire' } },
+      { id: 196, condition: { type: 'happiness', value: 220 } },
+      { id: 197, condition: { type: 'happiness', value: 220 } },
+      { id: 470, condition: { type: 'stone', value: 'leaf' } },
+      { id: 471, condition: { type: 'stone', value: 'ice' } },
+      { id: 700, condition: { type: 'happiness', value: 220 } }
+    ]
+  },
   { id: 134, name: 'Vaporeon', types: ['Water'], ability: 'Water Absorb', evolutionChain: [133, 134] },
   { id: 135, name: 'Jolteon', types: ['Electric'], ability: 'Volt Absorb', evolutionChain: [133, 135] },
   { id: 136, name: 'Flareon', types: ['Fire'], ability: 'Flash Fire', evolutionChain: [133, 136] },
-  { id: 137, name: 'Porygon', types: ['Normal'], ability: 'Trace', evolutionChain: [137, 233, 474] },
+  { 
+    id: 137, name: 'Porygon', types: ['Normal'], ability: 'Trace', evolutionChain: [137, 233, 474],
+    evolutions: [{ id: 233, condition: { type: 'stone', value: 'moon' } }]
+  },
   { id: 138, name: 'Omanyte', types: ['Rock', 'Water'], ability: 'Swift Swim', evolutionChain: [138, 139] },
   { id: 139, name: 'Omastar', types: ['Rock', 'Water'], ability: 'Swift Swim', evolutionChain: [138, 139] },
   { id: 140, name: 'Kabuto', types: ['Rock', 'Water'], ability: 'Swift Swim', evolutionChain: [140, 141] },
@@ -616,15 +735,24 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 384, name: 'Rayquaza', types: ['Dragon', 'Flying'], ability: 'Air Lock', evolutionChain: [384], isLegendary: true, baseStatsSum: 680 },
   { id: 152, name: 'Chikorita', types: ['Grass'], ability: 'Overgrow', evolutionChain: [152, 153, 154] },
   { id: 153, name: 'Bayleef', types: ['Grass'], ability: 'Overgrow', evolutionChain: [152, 153, 154] },
-  { id: 154, name: 'Meganium', types: ['Grass'], ability: 'Overgrow', evolutionChain: [152, 153, 154] },
+  { id: 154, name: 'Meganium', types: ['Grass'], ability: 'Overgrow', evolutionChain: [152, 153, 154], baseStatsSum: 525 },
   { id: 155, name: 'Cyndaquil', types: ['Fire'], ability: 'Blaze', evolutionChain: [155, 156, 157] },
   { id: 156, name: 'Quilava', types: ['Fire'], ability: 'Blaze', evolutionChain: [155, 156, 157] },
-  { id: 157, name: 'Typhlosion', types: ['Fire'], ability: 'Blaze', evolutionChain: [155, 156, 157] },
+  { id: 157, name: 'Typhlosion', types: ['Fire'], ability: 'Blaze', evolutionChain: [155, 156, 157], baseStatsSum: 534 },
   { id: 158, name: 'Totodile', types: ['Water'], ability: 'Torrent', evolutionChain: [158, 159, 160] },
   { id: 159, name: 'Croconaw', types: ['Water'], ability: 'Torrent', evolutionChain: [158, 159, 160] },
-  { id: 160, name: 'Feraligatr', types: ['Water'], ability: 'Torrent', evolutionChain: [158, 159, 160] },
+  { id: 160, name: 'Feraligatr', types: ['Water'], ability: 'Torrent', evolutionChain: [158, 159, 160], baseStatsSum: 530 },
   { id: 161, name: 'Sentret', types: ['Normal'], ability: 'Run Away', evolutionChain: [161, 162] },
   { id: 162, name: 'Furret', types: ['Normal'], ability: 'Run Away', evolutionChain: [161, 162] },
+  { 
+    id: 175, name: 'Togepi', types: ['Fairy'], ability: 'Serene Grace', evolutionChain: [175, 176, 468],
+    evolutions: [{ id: 176, condition: { type: 'happiness', value: 220 } }]
+  },
+  { 
+    id: 176, name: 'Togetic', types: ['Fairy', 'Flying'], ability: 'Serene Grace', evolutionChain: [175, 176, 468],
+    evolutions: [{ id: 468, condition: { type: 'stone', value: 'shiny' } }]
+  },
+  { id: 468, name: 'Togekiss', types: ['Fairy', 'Flying'], ability: 'Serene Grace', evolutionChain: [175, 176, 468], baseStatsSum: 545 },
   { id: 179, name: 'Mareep', types: ['Electric'], ability: 'Static', evolutionChain: [179, 180, 181] },
   { id: 180, name: 'Flaaffy', types: ['Electric'], ability: 'Static', evolutionChain: [179, 180, 181] },
   { id: 181, name: 'Ampharos', types: ['Electric'], ability: 'Static', evolutionChain: [179, 180, 181] },
@@ -649,6 +777,14 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 280, name: 'Ralts', types: ['Psychic', 'Fairy'], ability: 'Synchronize', evolutionChain: [280, 281, 282] },
   { id: 281, name: 'Kirlia', types: ['Psychic', 'Fairy'], ability: 'Synchronize', evolutionChain: [280, 281, 282] },
   { id: 282, name: 'Gardevoir', types: ['Psychic', 'Fairy'], ability: 'Synchronize', evolutionChain: [280, 281, 282] },
+  { id: 304, name: 'Aron', types: ['Steel', 'Rock'], ability: 'Sturdy', evolutionChain: [304, 305, 306] },
+  { id: 305, name: 'Lairon', types: ['Steel', 'Rock'], ability: 'Sturdy', evolutionChain: [304, 305, 306] },
+  { id: 306, name: 'Aggron', types: ['Steel', 'Rock'], ability: 'Sturdy', evolutionChain: [304, 305, 306], baseStatsSum: 530 },
+  { id: 328, name: 'Trapinch', types: ['Ground'], ability: 'Arena Trap', evolutionChain: [328, 329, 330] },
+  { id: 329, name: 'Vibrava', types: ['Ground', 'Dragon'], ability: 'Levitate', evolutionChain: [328, 329, 330] },
+  { id: 330, name: 'Flygon', types: ['Ground', 'Dragon'], ability: 'Levitate', evolutionChain: [328, 329, 330], baseStatsSum: 520 },
+  { id: 333, name: 'Swablu', types: ['Normal', 'Flying'], ability: 'Natural Cure', evolutionChain: [333, 334] },
+  { id: 334, name: 'Altaria', types: ['Dragon', 'Flying'], ability: 'Natural Cure', evolutionChain: [333, 334], baseStatsSum: 490 },
   { id: 371, name: 'Bagon', types: ['Dragon'], ability: 'Rock Head', evolutionChain: [371, 372, 373] },
   { id: 372, name: 'Shelgon', types: ['Dragon'], ability: 'Rock Head', evolutionChain: [371, 372, 373] },
   { id: 373, name: 'Salamence', types: ['Dragon', 'Flying'], ability: 'Intimidate', evolutionChain: [371, 372, 373], baseStatsSum: 600 },
@@ -671,8 +807,17 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 393, name: 'Piplup', types: ['Water'], ability: 'Torrent', evolutionChain: [393, 394, 395] },
   { id: 394, name: 'Prinplup', types: ['Water'], ability: 'Torrent', evolutionChain: [393, 394, 395] },
   { id: 395, name: 'Empoleon', types: ['Water', 'Steel'], ability: 'Torrent', evolutionChain: [393, 394, 395], baseStatsSum: 530 },
-  { id: 447, name: 'Riolu', types: ['Fighting'], ability: 'Steadfast', evolutionChain: [447, 448] },
+  { id: 403, name: 'Shinx', types: ['Electric'], ability: 'Rivalry', evolutionChain: [403, 404, 405] },
+  { id: 404, name: 'Luxio', types: ['Electric'], ability: 'Rivalry', evolutionChain: [403, 404, 405] },
+  { id: 405, name: 'Luxray', types: ['Electric'], ability: 'Intimidate', evolutionChain: [403, 404, 405], baseStatsSum: 523 },
+  { 
+    id: 447, name: 'Riolu', types: ['Fighting'], ability: 'Steadfast', evolutionChain: [447, 448],
+    evolutions: [{ id: 448, condition: { type: 'happiness', value: 220 } }]
+  },
   { id: 448, name: 'Lucario', types: ['Fighting', 'Steel'], ability: 'Steadfast', evolutionChain: [447, 448], baseStatsSum: 525 },
+  { id: 459, name: 'Snover', types: ['Grass', 'Ice'], ability: 'Snow Warning', evolutionChain: [459, 460] },
+  { id: 460, name: 'Abomasnow', types: ['Grass', 'Ice'], ability: 'Snow Warning', evolutionChain: [459, 460], baseStatsSum: 494 },
+  { id: 479, name: 'Rotom', types: ['Electric', 'Ghost'], ability: 'Levitate', evolutionChain: [479], baseStatsSum: 440 },
   { id: 495, name: 'Snivy', types: ['Grass'], ability: 'Overgrow', evolutionChain: [495, 496, 497] },
   { id: 496, name: 'Servine', types: ['Grass'], ability: 'Overgrow', evolutionChain: [495, 496, 497] },
   { id: 497, name: 'Serperior', types: ['Grass'], ability: 'Overgrow', evolutionChain: [495, 496, 497] },
@@ -873,6 +1018,9 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 692, name: 'Clauncher', types: ['Water'], ability: 'Mega Launcher', evolutionChain: [692, 693] },
   { id: 693, name: 'Clawitzer', types: ['Water'], ability: 'Mega Launcher', evolutionChain: [692, 693] },
   { id: 694, name: 'Helioptile', types: ['Electric', 'Normal'], ability: 'Dry Skin', evolutionChain: [694, 695] },
+  { id: 704, name: 'Goomy', types: ['Dragon'], ability: 'Sap Sipper', evolutionChain: [704, 705, 706] },
+  { id: 705, name: 'Sliggoo', types: ['Dragon'], ability: 'Sap Sipper', evolutionChain: [704, 705, 706] },
+  { id: 706, name: 'Goodra', types: ['Dragon'], ability: 'Sap Sipper', evolutionChain: [704, 705, 706], baseStatsSum: 600 },
   { id: 722, name: 'Rowlet', types: ['Grass', 'Flying'], ability: 'Overgrow', evolutionChain: [722, 723, 724] },
   { id: 723, name: 'Dartrix', types: ['Grass', 'Flying'], ability: 'Overgrow', evolutionChain: [722, 723, 724] },
   { id: 724, name: 'Decidueye', types: ['Grass', 'Ghost'], ability: 'Overgrow', evolutionChain: [722, 723, 724] },
@@ -882,6 +1030,9 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 728, name: 'Popplio', types: ['Water'], ability: 'Torrent', evolutionChain: [728, 729, 730] },
   { id: 729, name: 'Brionne', types: ['Water'], ability: 'Torrent', evolutionChain: [728, 729, 730] },
   { id: 730, name: 'Primarina', types: ['Water', 'Fairy'], ability: 'Torrent', evolutionChain: [728, 729, 730] },
+  { id: 782, name: 'Jangmo-o', types: ['Dragon'], ability: 'Bulletproof', evolutionChain: [782, 783, 784] },
+  { id: 783, name: 'Hakamo-o', types: ['Dragon', 'Fighting'], ability: 'Bulletproof', evolutionChain: [782, 783, 784] },
+  { id: 784, name: 'Kommo-o', types: ['Dragon', 'Fighting'], ability: 'Bulletproof', evolutionChain: [782, 783, 784], baseStatsSum: 600 },
   // Gen 8
   { id: 810, name: 'Grookey', types: ['Grass'], ability: 'Overgrow', evolutionChain: [810, 811, 812] },
   { id: 811, name: 'Thwackey', types: ['Grass'], ability: 'Overgrow', evolutionChain: [810, 811, 812] },
@@ -926,6 +1077,31 @@ const POKEDEX_BASE: PokemonBase[] = [
   { id: 957, name: 'Tinkatink', types: ['Fairy', 'Steel'], ability: 'Mold Breaker', evolutionChain: [957, 958, 959] },
   { id: 958, name: 'Tinkatuff', types: ['Fairy', 'Steel'], ability: 'Mold Breaker', evolutionChain: [957, 958, 959] },
   { id: 959, name: 'Tinkaton', types: ['Fairy', 'Steel'], ability: 'Mold Breaker', evolutionChain: [957, 958, 959], baseStatsSum: 506 },
+  // Eeveelutions missing
+  { id: 196, name: 'Espeon', types: ['Psychic'], ability: 'Synchronize', evolutionChain: [133, 196], baseStatsSum: 525 },
+  { id: 197, name: 'Umbreon', types: ['Dark'], ability: 'Synchronize', evolutionChain: [133, 197], baseStatsSum: 525 },
+  { id: 470, name: 'Leafeon', types: ['Grass'], ability: 'Leaf Guard', evolutionChain: [133, 470], baseStatsSum: 525 },
+  { id: 471, name: 'Glaceon', types: ['Ice'], ability: 'Snow Cloak', evolutionChain: [133, 471], baseStatsSum: 525 },
+  { id: 700, name: 'Sylveon', types: ['Fairy'], ability: 'Cute Charm', evolutionChain: [133, 700], baseStatsSum: 525 },
+  // Cross-gen evolutions
+  { id: 169, name: 'Crobat', types: ['Poison', 'Flying'], ability: 'Inner Focus', evolutionChain: [41, 42, 169], baseStatsSum: 535 },
+  { id: 208, name: 'Steelix', types: ['Steel', 'Ground'], ability: 'Rock Head', evolutionChain: [95, 208], baseStatsSum: 510 },
+  { id: 212, name: 'Scizor', types: ['Bug', 'Steel'], ability: 'Swarm', evolutionChain: [123, 212], baseStatsSum: 500 },
+  { id: 230, name: 'Kingdra', types: ['Water', 'Dragon'], ability: 'Swift Swim', evolutionChain: [116, 117, 230], baseStatsSum: 540 },
+  { 
+    id: 233, name: 'Porygon2', types: ['Normal'], ability: 'Trace', evolutionChain: [137, 233, 474], baseStatsSum: 515,
+    evolutions: [{ id: 474, condition: { type: 'stone', value: 'shiny' } }]
+  },
+  { id: 242, name: 'Blissey', types: ['Normal'], ability: 'Natural Cure', evolutionChain: [113, 242], baseStatsSum: 540 },
+  { id: 462, name: 'Magnezone', types: ['Electric', 'Steel'], ability: 'Magnet Pull', evolutionChain: [81, 82, 462], baseStatsSum: 535 },
+  { id: 464, name: 'Rhyperior', types: ['Ground', 'Rock'], ability: 'Lightning Rod', evolutionChain: [111, 112, 464], baseStatsSum: 535 },
+  { id: 465, name: 'Tangrowth', types: ['Grass'], ability: 'Chlorophyll', evolutionChain: [114, 465], baseStatsSum: 535 },
+  { id: 466, name: 'Electivire', types: ['Electric'], ability: 'Motor Drive', evolutionChain: [125, 466], baseStatsSum: 540 },
+  { id: 467, name: 'Magmortar', types: ['Fire'], ability: 'Flame Body', evolutionChain: [126, 467], baseStatsSum: 540 },
+  { id: 474, name: 'Porygon-Z', types: ['Normal'], ability: 'Adaptability', evolutionChain: [137, 233, 474], baseStatsSum: 535 },
+  { id: 182, name: 'Bellossom', types: ['Grass'], ability: 'Chlorophyll', evolutionChain: [43, 44, 182], baseStatsSum: 490 },
+  { id: 186, name: 'Politoed', types: ['Water'], ability: 'Water Absorb', evolutionChain: [60, 61, 186], baseStatsSum: 500 },
+  { id: 199, name: 'Slowking', types: ['Water', 'Psychic'], ability: 'Oblivious', evolutionChain: [79, 199], baseStatsSum: 490 },
 ];
 
 const PACK_TYPES = [
@@ -951,6 +1127,11 @@ const SPONSOR_TEMPLATES: Omit<Sponsor, 'currentValue' | 'isCompleted'>[] = [
   { id: 'silph_co', name: 'Silph Co.', description: 'Evoluciona a tus Pokémon para demostrar nuestra tecnología.', goal: 'Evoluciona 2 Pokémon', reward: { coins: 5000, stardust: 1000 }, targetValue: 2 },
   { id: 'devon_corp', name: 'Devon Corp.', description: 'Gana partidos para promocionar nuestra marca.', goal: 'Gana 5 partidos', reward: { coins: 3000, tp: 500 }, targetValue: 5 },
   { id: 'poke_mart', name: 'Poké Mart', description: 'Abre sobres para aumentar las ventas.', goal: 'Abre 10 sobres', reward: { coins: 2000, stardust: 2000 }, targetValue: 10 },
+  { id: 'aether_foundation', name: 'Fundación Æther', description: 'Cuida a tus Pokémon y aumenta su felicidad.', goal: 'Aumenta felicidad 5 veces', reward: { coins: 4000, stardust: 1500 }, targetValue: 5 },
+  { id: 'macro_cosmos', name: 'Macro Cosmos', description: 'Demuestra tu poder en la Liga Pokémon.', goal: 'Sube 1 nivel de Liga', reward: { coins: 10000, stardust: 5000 }, targetValue: 1 },
+  { id: 'team_yell', name: 'Team Yell', description: '¡Anima a tus Pokémon en combate!', goal: 'Usa 10 movimientos en combate', reward: { coins: 1500, tp: 1000 }, targetValue: 10 },
+  { id: 'kimono_girls', name: 'Chicas Kimono', description: 'Demuestra la elegancia de tus Pokémon de Johto.', goal: 'Evoluciona 1 Pokémon con felicidad', reward: { coins: 5000, stardust: 2000 }, targetValue: 1 },
+  { id: 'galaxy_team', name: 'Equipo Galaxia', description: 'Investiga la energía de las evoluciones en Sinnoh.', goal: 'Usa 3 piedras evolutivas', reward: { coins: 8000, tp: 1500 }, targetValue: 3 },
 ];
 
 const TRAINING_COST_BASE = 400;
@@ -1140,7 +1321,25 @@ const ALL_EVENTS: GameEvent[] = [
     color: 'border-emerald-500 text-emerald-400',
     modifiers: { tpMultiplier: 1.5 },
     endDate: Date.now() + 86400000 * 2
-  }
+  },
+  {
+    id: 'johto_journey',
+    title: 'Viaje por Johto',
+    description: '¡Los Pokémon de Johto están apareciendo más! +30% Stardust en batallas.',
+    icon: '🍃',
+    color: 'border-emerald-500 text-emerald-400',
+    modifiers: { stardustMultiplier: 1.3 },
+    endDate: Date.now() + 86400000 * 3
+  },
+  {
+    id: 'sinnoh_summit',
+    title: 'Cumbre de Sinnoh',
+    description: '¡La energía de Sinnoh potencia las evoluciones! Coste de evolución reducido un 20%.',
+    icon: '🏔️',
+    color: 'border-cyan-500 text-cyan-400',
+    modifiers: { evolutionDiscount: 0.8 },
+    endDate: Date.now() + 86400000 * 3
+  },
 ];
 
 const moveCache = new Map<string, Move>();
@@ -1195,13 +1394,15 @@ const fetchMoveData = async (moveUrl: string): Promise<Move> => {
   }
 };
 
-const fetchEvolutionLevel = async (id: number): Promise<number | null> => {
-  if (evolutionCache.has(id)) return evolutionCache.get(id)!;
+const fetchSpeciesData = async (id: number): Promise<{ evolutionLevel: number | null, baseHappiness: number }> => {
+  if (evolutionCache.has(id)) return { evolutionLevel: evolutionCache.get(id)!, baseHappiness: 70 }; // Default 70 if cached only level
   try {
     const speciesRes = await fetchWithTimeout(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
     if (!speciesRes.ok) throw new Error('Failed to fetch species');
     const speciesData = await speciesRes.json();
-    if (!speciesData?.evolution_chain?.url) return null;
+    const baseHappiness = speciesData.base_happiness ?? 70;
+    
+    if (!speciesData?.evolution_chain?.url) return { evolutionLevel: null, baseHappiness };
     const chainRes = await fetchWithTimeout(speciesData.evolution_chain.url);
     if (!chainRes.ok) throw new Error('Failed to fetch chain');
     const chainData = await chainRes.json();
@@ -1225,10 +1426,15 @@ const fetchEvolutionLevel = async (id: number): Promise<number | null> => {
 
     const minLevel = findMinLevel(chainData.chain, speciesData.name);
     evolutionCache.set(id, minLevel);
-    return minLevel;
+    return { evolutionLevel: minLevel, baseHappiness };
   } catch (e) {
-    return null;
+    return { evolutionLevel: null, baseHappiness: 70 };
   }
+};
+
+const fetchEvolutionLevel = async (id: number): Promise<number | null> => {
+  const data = await fetchSpeciesData(id);
+  return data.evolutionLevel;
 };
 
 const getPokemonRarity = (base: PokemonBase): Rarity => {
@@ -1321,7 +1527,9 @@ const generatePokemon = async (base: PokemonBase, rarity: Rarity, targetLevel: n
       pokemonDataCache.set(base.id, data);
     }
     
-    evolutionLevel = await fetchEvolutionLevel(base.id);
+    const speciesData = await fetchSpeciesData(base.id);
+    evolutionLevel = speciesData.evolutionLevel;
+    const baseHappiness = speciesData.baseHappiness;
     
     const levelUpMoves = (data.moves || []).filter((m: any) => 
       m?.version_group_details?.some((v: any) => v?.move_learn_method?.name === 'level-up' && v?.level_learned_at <= targetLevel)
@@ -1365,6 +1573,9 @@ const generatePokemon = async (base: PokemonBase, rarity: Rarity, targetLevel: n
     }
   }
   
+  const speciesData = await fetchSpeciesData(base.id);
+  const baseHappiness = speciesData.baseHappiness;
+
   return {
     ...base,
     instanceId: Math.random().toString(36).substr(2, 9),
@@ -1388,6 +1599,7 @@ const generatePokemon = async (base: PokemonBase, rarity: Rarity, targetLevel: n
     isShiny,
     fatigue: 0,
     moral: 100,
+    happiness: baseHappiness,
     isInjured: false,
     injuryWeeks: 0,
     matchesPlayed: 0,
@@ -1445,7 +1657,7 @@ const PokemonCardUI = ({
       whileHover={{ scale: 1.05, y: -10, rotateY: 5, rotateX: -5 }}
       whileTap={{ scale: 0.98 }}
       onClick={onSelect ? (e) => { e.stopPropagation(); onSelect(); } : undefined}
-      className={`relative w-full aspect-[2/3] rounded-2xl border-2 backdrop-blur-md ${isSelected ? 'border-indigo-500 ring-4 ring-indigo-500/20' : pokemon.fatigue > 70 ? 'border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)] animate-pulse' : config.border} ${config.bg} p-3 sm:p-4 flex flex-col items-center justify-between overflow-hidden group ${config.shadow} ${onSelect ? 'cursor-pointer' : ''} transition-shadow duration-300`}
+      className={`relative w-full aspect-[2/3] rounded-2xl border-2 backdrop-blur-md ${isSelected ? 'border-indigo-500 ring-4 ring-indigo-500/20' : pokemon.fatigue > 70 ? 'border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)] animate-pulse' : config.border} ${config.bg} p-2 sm:p-4 flex flex-col items-center justify-between overflow-hidden group ${config.shadow} ${onSelect ? 'cursor-pointer' : ''} transition-shadow duration-300`}
       style={{ perspective: '1000px' }}
     >
       {/* Dynamic Holographic Overlay */}
@@ -1463,20 +1675,37 @@ const PokemonCardUI = ({
         </div>
       )}
 
+      {/* Item Icon */}
+      {pokemon.item && (
+        <div className="absolute top-12 right-3 z-30 group/item">
+          <div className="bg-black/60 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-lg">
+            <img 
+              src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${pokemon.item}.png`} 
+              alt={pokemon.item}
+              className="w-5 h-5 object-contain"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+          <div className="absolute right-full mr-2 top-0 bg-zinc-800 text-[8px] font-black px-2 py-1 rounded border border-white/10 opacity-0 group-hover/item:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            {HELD_ITEMS.find(i => i.id === pokemon.item)?.name}
+          </div>
+        </div>
+      )}
+
       {/* Header Info */}
       <div className="w-full flex justify-between items-start z-20">
-        <div className={`px-2 py-0.5 rounded-lg text-[9px] font-black border border-white/10 flex items-center gap-1 ${pokemon.limitBroken ? 'bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-500/40' : 'bg-black/40 text-white/90 backdrop-blur-md'}`}>
+        <div className={`px-1.5 py-0.5 rounded-lg text-[8px] sm:text-[9px] font-black border border-white/10 flex items-center gap-1 ${pokemon.limitBroken ? 'bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-500/40' : 'bg-black/40 text-white/90 backdrop-blur-md'}`}>
           {pokemon.limitBroken && <Zap size={10} fill="currentColor" />}
           LVL {pokemon.level}
         </div>
         
         <div className="flex flex-col items-end gap-1">
-          <div className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${config.color} bg-black/60 backdrop-blur-md border border-white/10`}>
+          <div className={`px-1.5 py-0.5 rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${config.color} bg-black/60 backdrop-blur-md border border-white/10`}>
             {pokemon.rarity}
           </div>
           {pokemon.isShiny && (
-            <div className="px-2 py-0.5 rounded-lg text-[9px] font-black bg-gradient-to-r from-amber-400 to-yellow-300 text-black border border-yellow-200 flex items-center gap-1 shadow-lg shadow-amber-500/20">
-              <Sparkles size={10} /> SHINY
+            <div className="px-1.5 py-0.5 rounded-lg text-[8px] sm:text-[9px] font-black bg-gradient-to-r from-amber-400 to-yellow-300 text-black border border-yellow-200 flex items-center gap-1 shadow-lg shadow-amber-500/20">
+              <Sparkles size={8} className="sm:w-[10px] sm:h-[10px]" /> SHINY
             </div>
           )}
         </div>
@@ -1498,28 +1727,28 @@ const PokemonCardUI = ({
         <motion.img 
           src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.isShiny ? 'shiny/' : ''}${pokemon.id}.png`} 
           alt={pokemon.name}
-          className={`w-32 h-32 sm:w-44 sm:h-44 object-contain relative z-10 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-500 animate-float ${pokemon.isInjured ? 'grayscale opacity-50' : ''}`}
+          className={`w-28 h-28 xs:w-32 xs:h-32 sm:w-44 sm:h-44 object-contain relative z-10 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-500 animate-float ${pokemon.isInjured ? 'grayscale opacity-50' : ''}`}
           referrerPolicy="no-referrer"
         />
       </div>
 
       {/* Info Section */}
-      <div className="w-full text-center space-y-0.5 relative z-10 mt-1">
-        <h3 className="text-xl sm:text-2xl font-black italic tracking-tighter text-white uppercase truncate drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+      <div className="w-full text-center space-y-0 relative z-10 mt-1">
+        <h3 className="text-lg xs:text-xl sm:text-2xl font-black italic tracking-tighter text-white uppercase truncate drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] px-1">
           {pokemon.name}
         </h3>
         <div className="flex flex-col items-center">
           <div className="flex items-baseline gap-1">
-            <span className={`text-3xl sm:text-4xl font-black italic tracking-tighter ${pokemon.fatigue > 30 ? 'text-red-400' : 'text-white'} drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]`}>
+            <span className={`text-2xl xs:text-3xl sm:text-4xl font-black italic tracking-tighter ${pokemon.fatigue > 30 ? 'text-red-400' : 'text-white'} drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]`}>
               {pokemon.ovr - (pokemon.fatigue > 30 ? Math.floor((pokemon.fatigue - 30) / 2) : 0)}
             </span>
-            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">PWR</span>
+            <span className="text-[8px] sm:text-[10px] font-black text-white/40 uppercase tracking-widest">PWR</span>
           </div>
-          <div className="flex justify-center gap-1.5 mt-0.5">
-            <div className="text-[8px] font-black text-indigo-300 uppercase bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30 backdrop-blur-sm">
+          <div className="flex justify-center gap-1 mt-0.5">
+            <div className="text-[7px] sm:text-[8px] font-black text-indigo-300 uppercase bg-indigo-500/20 px-1.5 sm:px-2 py-0.5 rounded border border-indigo-500/30 backdrop-blur-sm">
               {pokemon.nature || 'Fuerte'}
             </div>
-            <div className="text-[8px] font-black text-zinc-300 uppercase bg-zinc-500/20 px-2 py-0.5 rounded border border-zinc-500/30 backdrop-blur-sm truncate max-w-[90px]">
+            <div className="text-[7px] sm:text-[8px] font-black text-zinc-300 uppercase bg-zinc-500/20 px-1.5 sm:px-2 py-0.5 rounded border border-zinc-500/30 backdrop-blur-sm truncate max-w-[70px] sm:max-w-[90px]">
               {pokemon.ability}
             </div>
           </div>
@@ -1527,7 +1756,7 @@ const PokemonCardUI = ({
       </div>
 
       {/* Stats Grid */}
-      <div className="w-full grid grid-cols-4 gap-1 py-2 border-t border-white/10 relative z-10 mt-2">
+      <div className="w-full grid grid-cols-4 gap-0.5 sm:gap-1 py-1 sm:py-2 border-t border-white/10 relative z-10 mt-1 sm:mt-2">
         {[
           { label: 'HP', val: pokemon.hp, iv: pokemon.ivs?.hp },
           { label: 'ATK', val: pokemon.atk, iv: pokemon.ivs?.atk },
@@ -1535,11 +1764,11 @@ const PokemonCardUI = ({
           { label: 'SPE', val: pokemon.spe, iv: pokemon.ivs?.spe }
         ].map((stat) => (
           <div key={stat.label} className="text-center">
-            <div className="text-[7px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">{stat.label}</div>
-            <div className={`text-xs font-black ${stat.iv === 31 ? 'text-amber-400' : stat.iv === 0 ? 'text-red-400' : 'text-white'}`}>
+            <div className="text-[6px] sm:text-[7px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">{stat.label}</div>
+            <div className={`text-[10px] sm:text-xs font-black ${stat.iv === 31 ? 'text-amber-400' : stat.iv === 0 ? 'text-red-400' : 'text-white'}`}>
               {stat.val}
             </div>
-            <div className={`text-[6px] font-bold uppercase ${stat.iv === 31 ? 'text-amber-500/60' : 'text-zinc-600'}`}>IV:{stat.iv}</div>
+            <div className={`text-[5px] sm:text-[6px] font-bold uppercase ${stat.iv === 31 ? 'text-amber-500/60' : 'text-zinc-600'}`}>IV:{stat.iv}</div>
           </div>
         ))}
       </div>
@@ -1547,15 +1776,15 @@ const PokemonCardUI = ({
       {/* Progress Bars Section */}
       <div className="w-full space-y-2 relative z-10">
         {/* Fatigue Bar */}
-        <div className="bg-black/40 backdrop-blur-md rounded-xl p-2 border border-white/5">
-          <div className="flex justify-between items-center mb-1.5">
-            <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-400 uppercase tracking-widest">
-              <Activity size={12} className={pokemon.fatigue > 70 ? 'text-red-400' : pokemon.fatigue > 40 ? 'text-yellow-400' : 'text-green-400'} />
+        <div className="bg-black/40 backdrop-blur-md rounded-xl p-1.5 sm:p-2 border border-white/5">
+          <div className="flex justify-between items-center mb-1 sm:mb-1.5">
+            <div className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[9px] font-black text-zinc-400 uppercase tracking-widest">
+              <Activity size={10} className={`sm:w-[12px] sm:h-[12px] ${pokemon.fatigue > 70 ? 'text-red-400' : pokemon.fatigue > 40 ? 'text-yellow-400' : 'text-green-400'}`} />
               <span>Fatiga</span>
             </div>
-            <span className={`text-[10px] font-black ${pokemon.fatigue > 70 ? 'text-red-400' : pokemon.fatigue > 40 ? 'text-yellow-400' : 'text-green-400'}`}>{pokemon.fatigue}%</span>
+            <span className={`text-[9px] sm:text-[10px] font-black ${pokemon.fatigue > 70 ? 'text-red-400' : pokemon.fatigue > 40 ? 'text-yellow-400' : 'text-green-400'}`}>{pokemon.fatigue}%</span>
           </div>
-          <div className="h-2 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+          <div className="h-1.5 sm:h-2 bg-zinc-950 rounded-full overflow-hidden p-0.5">
             <motion.div 
               initial={{ width: 0 }}
               animate={{ width: `${pokemon.fatigue}%` }}
@@ -1564,16 +1793,34 @@ const PokemonCardUI = ({
           </div>
         </div>
 
+        {/* Happiness Bar */}
+        <div className="bg-black/40 backdrop-blur-md rounded-xl p-1.5 sm:p-2 border border-white/5">
+          <div className="flex justify-between items-center mb-1 sm:mb-1.5">
+            <div className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[9px] font-black text-zinc-400 uppercase tracking-widest">
+              <Heart size={10} className={`sm:w-[12px] sm:h-[12px] ${pokemon.happiness > 200 ? 'text-rose-400' : pokemon.happiness > 100 ? 'text-pink-400' : 'text-zinc-400'}`} />
+              <span>Felicidad</span>
+            </div>
+            <span className={`text-[9px] sm:text-[10px] font-black ${pokemon.happiness > 200 ? 'text-rose-400' : pokemon.happiness > 100 ? 'text-pink-400' : 'text-zinc-400'}`}>{pokemon.happiness}/255</span>
+          </div>
+          <div className="h-1.5 sm:h-2 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `${(pokemon.happiness / 255) * 100}%` }}
+              className={`h-full rounded-full shadow-inner transition-all duration-1000 ${pokemon.happiness > 200 ? 'bg-gradient-to-r from-rose-600 to-rose-400' : pokemon.happiness > 100 ? 'bg-gradient-to-r from-pink-600 to-pink-400' : 'bg-gradient-to-r from-zinc-600 to-zinc-400'}`} 
+            />
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           {/* Training Bar */}
-          <div className="bg-black/40 backdrop-blur-md rounded-xl p-2 border border-white/5">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Nivel</span>
-              <span className="text-[9px] font-black text-indigo-400">
+          <div className="bg-black/40 backdrop-blur-md rounded-xl p-1.5 sm:p-2 border border-white/5">
+            <div className="flex justify-between items-center mb-0.5 sm:mb-1">
+              <span className="text-[7px] sm:text-[8px] font-black text-zinc-500 uppercase tracking-widest">Nivel</span>
+              <span className="text-[8px] sm:text-[9px] font-black text-indigo-400">
                 {pokemon.level}/{pokemon.evolutionLevel || pokemon.maxLevel}
               </span>
             </div>
-            <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+            <div className="h-1 sm:h-1.5 bg-zinc-950 rounded-full overflow-hidden p-0.5">
               <motion.div 
                 initial={{ width: 0 }}
                 animate={{ width: `${(pokemon.level / (pokemon.evolutionLevel || pokemon.maxLevel)) * 100}%` }}
@@ -1583,12 +1830,12 @@ const PokemonCardUI = ({
           </div>
 
           {/* Power Bar */}
-          <div className="bg-black/40 backdrop-blur-md rounded-xl p-2 border border-white/5">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Poder</span>
-              <span className="text-[9px] font-black text-amber-400">{pokemon.powerLevel}/10</span>
+          <div className="bg-black/40 backdrop-blur-md rounded-xl p-1.5 sm:p-2 border border-white/5">
+            <div className="flex justify-between items-center mb-0.5 sm:mb-1">
+              <span className="text-[7px] sm:text-[8px] font-black text-zinc-500 uppercase tracking-widest">Poder</span>
+              <span className="text-[8px] sm:text-[9px] font-black text-amber-400">{pokemon.powerLevel}/10</span>
             </div>
-            <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden p-0.5">
+            <div className="h-1 sm:h-1.5 bg-zinc-950 rounded-full overflow-hidden p-0.5">
               <motion.div 
                 initial={{ width: 0 }}
                 animate={{ width: `${(pokemon.powerLevel / 10) * 100}%` }}
@@ -1679,7 +1926,7 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'team' | 'shop' | 'battles' | 'pokedex' | 'lab' | 'market' | 'settings' | 'hallOfFame' | 'missions' | 'event' | 'facilities' | 'staff' | 'league'>('team');
+  const [activeTab, setActiveTab] = useState<'team' | 'shop' | 'battles' | 'pokedex' | 'lab' | 'market' | 'settings' | 'hallOfFame' | 'missions' | 'event' | 'facilities' | 'staff' | 'league' | 'inventory' | 'explore'>('team');
   const [gameState, setGameState] = useState<'management' | 'battle'>('management');
   const [selectedLabPokemonId, setSelectedLabPokemonId] = useState<string | null>(null);
   const [showBatchTraining, setShowBatchTraining] = useState(false);
@@ -1720,7 +1967,25 @@ export default function App() {
   const [stardust, setStardust] = useState(() => Number(localStorage.getItem('plm_stardust')) || 500);
   const [energy, setEnergy] = useState(() => Number(localStorage.getItem('plm_energy')) || 100);
   const [tp, setTp] = useState(() => Number(localStorage.getItem('plm_tp')) || 200);
+  const [selectedExplorePokemonId, setSelectedExplorePokemonId] = useState<string | null>(null);
+  const [isExploring, setIsExploring] = useState(false);
+  const [exploreResult, setExploreResult] = useState<{ type: 'item' | 'coins' | 'happiness' | 'nothing', value: any, pokemonName?: string } | null>(null);
   const [banditas, setBanditas] = useState(() => Number(localStorage.getItem('plm_banditas')) || 2);
+  const [evolutionStones, setEvolutionStones] = useState<Record<string, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('plm_evolutionStones') || '{}');
+    } catch { return {}; }
+  });
+  const [heldItems, setHeldItems] = useState<Record<string, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('plm_heldItems') || '{}');
+    } catch { return {}; }
+  });
+  const [megaStones, setMegaStones] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('plm_megaStones') || '[]');
+    } catch { return []; }
+  });
   const [teamName, setTeamName] = useState(() => localStorage.getItem('plm_teamName') || 'Mis Pokémon');
   const [teamLogo, setTeamLogo] = useState(() => localStorage.getItem('plm_teamLogo') || '🛡️');
   const [totalMatches, setTotalMatches] = useState(() => Number(localStorage.getItem('plm_totalMatches')) || 0);
@@ -1776,6 +2041,7 @@ export default function App() {
   });
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonCard | null>(null);
   const [selectedPokedexPokemon, setSelectedPokedexPokemon] = useState<PokemonBase | null>(null);
+  const [showItemSelection, setShowItemSelection] = useState<string | null>(null);
   const [matchPreview, setMatchPreview] = useState<string | null>(null);
   const [previewRivalTeam, setPreviewRivalTeam] = useState<{p: PokemonCard, hp: number, maxHp: number}[] | null>(null);
   const [previewRivalInfo, setPreviewRivalInfo] = useState<any>(null);
@@ -2137,12 +2403,16 @@ export default function App() {
         { title: "Cazador de Tesoros", description: "Abre 2 sobres de cartas", goal: 2, reward: { stardust: 40, coins: 100 } },
         { title: "Primer Paso", description: "Gana 1 batalla", goal: 1, reward: { coins: 150, banditas: 1 } },
         { title: "Energía Pura", description: "Gasta 50 de energía", goal: 50, reward: { tp: 50 } },
+        { title: "Explorador", description: "Explora la zona 5 veces", goal: 5, reward: { coins: 300, stardust: 50 } },
+        { title: "Amistad", description: "Aumenta la felicidad de un Pokémon", goal: 1, reward: { tp: 30 } },
       ],
       weekly: [
         { title: "Maestro de la Liga", description: "Gana 10 batallas", goal: 10, reward: { coins: 2000, stardust: 400 } },
         { title: "Evolución Constante", description: "Evoluciona a 2 Pokémon", goal: 2, reward: { tp: 200, coins: 800 } },
         { title: "Inversión", description: "Gasta 10,000 monedas", goal: 10000, reward: { stardust: 800 } },
         { title: "Coleccionista", description: "Obtén 5 nuevos Pokémon", goal: 5, reward: { banditas: 10, coins: 400 } },
+        { title: "Magnate", description: "Gana 50,000 monedas en total", goal: 50000, reward: { stardust: 2000, tp: 500 } },
+        { title: "Veterano", description: "Gana 25 batallas", goal: 25, reward: { coins: 5000, stardust: 1000 } },
       ],
       event: [
         { title: "Héroe del Evento", description: "Completa 5 batallas de evento", goal: 5, reward: { coins: 1200, stardust: 200 } },
@@ -2196,6 +2466,10 @@ export default function App() {
       if (action === 'level_legendary' && (title.includes('poder') || title.includes('legendario'))) shouldUpdate = true;
       if (action === 'win_gym' && (title.includes('gimnasio') || title.includes('cima') || title.includes('leyenda'))) shouldUpdate = true;
       if (action === 'win_championship' && (title.includes('campeón') || title.includes('campeonato'))) shouldUpdate = true;
+      if (action === 'explore' && (title.includes('explorador') || title.includes('explora'))) shouldUpdate = true;
+      if (action === 'increase_happiness' && (title.includes('amistad') || title.includes('felicidad'))) shouldUpdate = true;
+      if (action === 'earn_coins' && (title.includes('magnate') || title.includes('monedas'))) shouldUpdate = true;
+      if (action === 'win_battle' && (title.includes('veterano') || title.includes('gana'))) shouldUpdate = true;
 
       if (shouldUpdate) {
         return { ...m, current: Math.min(m.goal, m.current + amount) };
@@ -2526,6 +2800,9 @@ export default function App() {
     localStorage.setItem('plm_energy', energy.toString());
     localStorage.setItem('plm_tp', tp.toString());
     localStorage.setItem('plm_banditas', banditas.toString());
+    localStorage.setItem('plm_evolutionStones', JSON.stringify(evolutionStones));
+    localStorage.setItem('plm_heldItems', JSON.stringify(heldItems));
+    localStorage.setItem('plm_megaStones', JSON.stringify(megaStones));
     localStorage.setItem('plm_teamName', teamName);
     localStorage.setItem('plm_teamLogo', teamLogo);
     localStorage.setItem('plm_totalMatches', totalMatches.toString());
@@ -2562,7 +2839,7 @@ export default function App() {
     localStorage.setItem('plm_theme', theme);
     localStorage.setItem('plm_audioEnabled', String(audioEnabled));
     localStorage.setItem('plm_notificationsEnabled', String(notificationsEnabled));
-  }, [coins, stardust, energy, tp, banditas, teamName, teamLogo, totalMatches, collection, team, history, leagueLevel, pokedex, badges, defeatedGyms, isLeagueQualified, leagueTeams, schedule, currentWeek, season, isTournamentMode, tournamentPlayedThisSeason, isChampionshipTournament, tournamentRule, tournamentBracket, activeSponsor, items, hallOfFame, nursery, marketOffers, globalBattleSpeed, activeEvent, missions, lastMissionReset, theme, audioEnabled, notificationsEnabled]);
+  }, [coins, stardust, energy, tp, banditas, evolutionStones, heldItems, teamName, teamLogo, totalMatches, collection, team, history, leagueLevel, pokedex, badges, defeatedGyms, isLeagueQualified, leagueTeams, schedule, currentWeek, season, isTournamentMode, tournamentPlayedThisSeason, isChampionshipTournament, tournamentRule, tournamentBracket, activeSponsor, items, hallOfFame, nursery, marketOffers, globalBattleSpeed, activeEvent, missions, lastMissionReset, theme, audioEnabled, notificationsEnabled]);
 
   // Helper to remove undefined values for Firestore
   const sanitizeForFirestore = (obj: any): any => {
@@ -2889,7 +3166,72 @@ export default function App() {
       }
       return p;
     }));
+    if (selectedPokemon?.instanceId === instanceId) {
+      setSelectedPokemon(prev => prev ? { ...prev, fatigue: Math.max(0, prev.fatigue - 50) } : null);
+    }
     setHistory(prev => [`🩹 Has usado una Bandita en ${target.name}.`, ...prev].slice(0, 10));
+  };
+
+  const handleEquipMegaStone = (instanceId: string, stoneName: string) => {
+    const target = collection.find(p => p.instanceId === instanceId);
+    if (!target) return;
+    setCollection(prev => prev.map(p => p.instanceId === instanceId ? { ...p, megaStone: stoneName } : p));
+    if (selectedPokemon?.instanceId === instanceId) {
+      setSelectedPokemon(prev => prev ? { ...prev, megaStone: stoneName } : null);
+    }
+    setMegaStones(prev => {
+      const newStones = [...prev];
+      newStones.splice(newStones.indexOf(stoneName), 1);
+      return newStones;
+    });
+    setHistory(prev => [`¡${target.name} ha equipado ${stoneName}!`, ...prev].slice(0, 10));
+  };
+
+  const handleUnequipMegaStone = (instanceId: string) => {
+    const target = collection.find(p => p.instanceId === instanceId);
+    if (!target || !target.megaStone) return;
+    const stoneName = target.megaStone;
+    setCollection(prev => prev.map(p => p.instanceId === instanceId ? { ...p, megaStone: undefined } : p));
+    if (selectedPokemon?.instanceId === instanceId) {
+      setSelectedPokemon(prev => prev ? { ...prev, megaStone: undefined } : null);
+    }
+    setMegaStones(prev => [...prev, stoneName]);
+    setHistory(prev => [`¡${target.name} se ha quitado ${stoneName}!`, ...prev].slice(0, 10));
+  };
+
+  const handleEquipItem = (instanceId: string, itemId: string) => {
+    setCollection(prev => prev.map(p => {
+      if (p.instanceId === instanceId) {
+        const oldItem = p.item;
+        if (oldItem) {
+          setHeldItems(prevItems => ({ ...prevItems, [oldItem]: (prevItems[oldItem] || 0) + 1 }));
+        }
+        setHeldItems(prevItems => ({ ...prevItems, [itemId]: Math.max(0, (prevItems[itemId] || 0) - 1) }));
+        
+        const updated = { ...p, item: itemId };
+        if (selectedPokemon?.instanceId === instanceId) setSelectedPokemon(updated);
+        return updated;
+      }
+      return p;
+    }));
+    const itemName = HELD_ITEMS.find(i => i.id === itemId)?.name || itemId;
+    setHistory(prev => [`Equipaste ${itemName} a tu Pokémon.`, ...prev].slice(0, 10));
+    setShowItemSelection(null);
+  };
+
+  const handleUnequipItem = (instanceId: string) => {
+    setCollection(prev => prev.map(p => {
+      if (p.instanceId === instanceId) {
+        const oldItem = p.item;
+        if (oldItem) {
+          setHeldItems(prevItems => ({ ...prevItems, [oldItem]: (prevItems[oldItem] || 0) + 1 }));
+        }
+        const updated = { ...p, item: undefined };
+        if (selectedPokemon?.instanceId === instanceId) setSelectedPokemon(updated);
+        return updated;
+      }
+      return p;
+    }));
   };
 
   const handleTrain = (instanceId: string) => {
@@ -3103,10 +3445,32 @@ export default function App() {
     );
   };
 
+  const currentEvolutionCost = Math.floor(EVOLUTION_COST * (activeEvent?.modifiers?.evolutionDiscount || 1));
+
   const handleEvolve = async (instanceId: string) => {
-    if (coins < EVOLUTION_COST) return;
+    if (coins < currentEvolutionCost) return;
     const target = collection.find(p => p.instanceId === instanceId);
     if (!target || target.powerLevel < 10) return;
+
+    if (target.evolutions && target.evolutions.length > 0) {
+      const eligible = target.evolutions.filter(evo => {
+        if (evo.condition.type === 'happiness') return target.happiness >= (evo.condition.value as number);
+        if (evo.condition.type === 'stone') return (Number(evolutionStones[evo.condition.value as string]) || 0) > 0;
+        return false;
+      });
+      if (eligible.length > 0) {
+        if (eligible.length === 1 && eligible[0].condition.type !== 'stone') {
+          // Evolve directly if it's just happiness and only one option
+          executeEvolution(target, eligible[0].id);
+        } else {
+          setPendingEvolution({ pokemon: target, options: eligible });
+        }
+        return;
+      } else {
+        setHistory(prev => [`❌ ${target.name} no cumple las condiciones para evolucionar.`, ...prev].slice(0, 10));
+        return;
+      }
+    }
 
     // Condition: Reach evolution level from API or max level if no level evolution
     const evolutionRequirement = target.evolutionLevel || target.maxLevel;
@@ -3116,13 +3480,21 @@ export default function App() {
     if (currentIndex === -1 || currentIndex >= (target.evolutionChain?.length || 0) - 1) return;
 
     const nextId = target.evolutionChain![currentIndex + 1];
+    executeEvolution(target, nextId);
+  };
+
+  const executeEvolution = async (target: PokemonCard, nextId: number, usedStone?: string) => {
     const nextBase = POKEDEX_BASE.find(b => b.id === nextId);
     if (!nextBase) return;
 
+    if (usedStone) {
+      setEvolutionStones(prev => ({ ...prev, [usedStone]: Math.max(0, (prev[usedStone] || 0) - 1) }));
+    }
+
     const nextEvolutionLevel = await fetchEvolutionLevel(nextId);
 
-    setCoins(c => Math.max(0, c - EVOLUTION_COST));
-    updateMissionProgress('spend_coins', EVOLUTION_COST);
+    setCoins(c => Math.max(0, c - currentEvolutionCost));
+    updateMissionProgress('spend_coins', currentEvolutionCost);
     updateMissionProgress('evolve', 1);
     if (!pokedex.includes(nextId)) setPokedex(px => [...px, nextId]);
 
@@ -3152,12 +3524,13 @@ export default function App() {
     }
 
     setCollection(prev => prev.map(p => {
-      if (p.instanceId === instanceId) {
+      if (p.instanceId === target.instanceId) {
         return evolvedPokemon;
       }
       return p;
     }));
     setHistory(prev => [`¡Tu Pokémon ha evolucionado!`, ...prev].slice(0, 10));
+    setPendingEvolution(null);
   };
 
   const toggleTeamMember = (instanceId: string) => {
@@ -3185,6 +3558,7 @@ export default function App() {
   };
 
   const [isGeneratingBattle, setIsGeneratingBattle] = useState(false);
+  const [pendingEvolution, setPendingEvolution] = useState<{ pokemon: PokemonCard, options: { id: number, condition: any }[] } | null>(null);
 
   const generateRivalTeam = async (rivalOvr: number, matchId?: string) => {
     const rivalTeamPromises = [...Array(6)].map(async () => {
@@ -3987,6 +4361,41 @@ export default function App() {
     return multiplier;
   };
 
+  const executeMegaEvolution = async () => {
+    if (!battleData) return;
+    const { playerTeam, playerIdx, speed } = battleData;
+    const currentPokemon = playerTeam[playerIdx];
+
+    if (!currentPokemon.p.megaStone || currentPokemon.p.megaEvolved) return;
+
+    setBattleData(prev => {
+      if (!prev) return null;
+      const next = { ...prev };
+      next.turn = 'animating';
+      next.log = [`¡${currentPokemon.p.name} está reaccionando a la ${currentPokemon.p.megaStone}!`, ...prev.log].slice(0, 5);
+      return next;
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 1000 / speed));
+
+    setBattleData(prev => {
+      if (!prev) return null;
+      const next = { ...prev };
+      const p = next.playerTeam[next.playerIdx].p;
+      
+      // Apply Mega Evolution stats boost (simplified: +30 to all base stats)
+      p.megaEvolved = true;
+      p.atk += 30;
+      p.def += 30;
+      p.spe += 30;
+      p.name = `Mega ${p.name}`;
+      
+      next.log = [`¡Mega Evolución completada! ¡${p.name} está listo para arrasar!`, ...prev.log].slice(0, 5);
+      next.turn = 'player';
+      return next;
+    });
+  };
+
   const executeMove = async (isPlayer: boolean, move?: Move) => {
     if (!battleData) return;
     const { playerTeam, rivalTeam, playerIdx, rivalIdx, speed } = battleData;
@@ -4049,8 +4458,13 @@ export default function App() {
     }
 
     // Item Modifiers
-    if (attacker.p.item === 'Choice Band') baseDamage *= 1.5;
-    if (attacker.p.item === 'Life Orb') baseDamage *= 1.3;
+    if (attacker.p.item === 'choice-band') baseDamage *= 1.5;
+    if (attacker.p.item === 'life-orb') baseDamage *= 1.3;
+    if (attacker.p.item === 'expert-belt' && multiplier > 1) baseDamage *= 1.2;
+    if (attacker.p.item === 'choice-scarf') {
+      // Since it's turn based, maybe Scarf gives a chance to dodge or extra momentum
+      // Let's make it increase momentum gain
+    }
     
     // Apply Event Modifiers
     if (activeEvent?.modifiers?.typeBoost && attacker.p.types?.includes(activeEvent.modifiers.typeBoost.type)) {
@@ -4098,12 +4512,26 @@ export default function App() {
     }
 
     // Life Orb recoil
-    if (attacker.p.item === 'Life Orb') {
+    if (attacker.p.item === 'life-orb') {
       const recoil = Math.floor(attacker.maxHp * 0.1);
       attacker.hp = Math.max(0, attacker.hp - recoil);
     }
 
-    const newHp = Math.max(0, (defender.hp || 0) - finalDamage);
+    let newHp = Math.max(0, (defender.hp || 0) - finalDamage);
+    
+    // Focus Sash
+    let sashTriggered = false;
+    if (defender.p.item === 'focus-sash' && defender.hp === defender.maxHp && newHp <= 0 && finalDamage > 0) {
+      newHp = 1;
+      sashTriggered = true;
+    }
+
+    // Leftovers
+    let leftoversHeal = 0;
+    if (attacker.p.item === 'leftovers' && attacker.hp > 0 && attacker.hp < attacker.maxHp) {
+      leftoversHeal = Math.floor(attacker.maxHp / 16);
+      attacker.hp = Math.min(attacker.maxHp, attacker.hp + leftoversHeal);
+    }
     
     // Periodic Damage (Burn/Poison)
     let periodicDamage = 0;
@@ -4126,6 +4554,8 @@ export default function App() {
       abilityLog ? `🌟 ${abilityLog}` : '',
       helmetLog ? `🛡️ ${helmetLog}` : '',
       periodicLog ? `⚠️ ${periodicLog}` : '',
+      sashTriggered ? `Focus Sash evitó el K.O. de ${defender.p.name}!` : '',
+      leftoversHeal > 0 ? `🍎 Restos curó a ${attacker.p.name}!` : '',
       `¡${attacker.p.name} usó ${selectedMove.name}!`,
       finalDamage > 0 ? `${defender.p.name || 'Pokémon'} recibió ${finalDamage} de daño.${multiplier > 1 ? ' ¡Es muy eficaz!' : multiplier < 1 && multiplier > 0 ? ' No es muy eficaz...' : multiplier === 0 ? ' No afecta...' : ''}` : '',
       statusApplied !== 'None' ? `¡${defender.p.name} ha sido ${statusApplied === 'Burn' ? 'quemado' : statusApplied === 'Poison' ? 'envenenado' : statusApplied === 'Paralysis' ? 'paralizado' : statusApplied === 'Sleep' ? 'dormido' : 'congelado'}!` : ''
@@ -4637,6 +5067,8 @@ export default function App() {
             <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
               {[
                 { id: 'team', icon: Users, label: 'Mi Equipo', color: 'rose' },
+                { id: 'inventory', icon: Package, label: 'Inventario', color: 'indigo' },
+                { id: 'explore', icon: MapIcon, label: 'Explorar', color: 'emerald' },
                 { id: 'missions', icon: Activity, label: 'Misiones', color: 'indigo' },
                 { id: 'event', icon: Sparkles, label: 'Eventos', color: 'amber' },
                 { id: 'lab', icon: FlaskConical, label: 'Laboratorio', color: 'indigo' },
@@ -4697,6 +5129,8 @@ export default function App() {
           <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
             {[
               { id: 'team', icon: Users, label: 'Mi Equipo', color: 'rose' },
+              { id: 'inventory', icon: Package, label: 'Inventario', color: 'indigo' },
+              { id: 'explore', icon: MapIcon, label: 'Explorar', color: 'emerald' },
               { id: 'missions', icon: Activity, label: 'Misiones', color: 'indigo' },
               { id: 'event', icon: Sparkles, label: 'Eventos', color: 'amber' },
               { id: 'lab', icon: FlaskConical, label: 'Laboratorio', color: 'indigo' },
@@ -4901,7 +5335,7 @@ export default function App() {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 w-full pb-32 lg:pb-12 custom-scrollbar">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-10 w-full pb-32 lg:pb-12 custom-scrollbar">
           <AnimatePresence mode="wait">
           {!isAuthReady ? (
             <motion.div
@@ -5341,6 +5775,18 @@ export default function App() {
                       </div>
                       {!battleData.showMoves && !battleData.showTeam ? (
                         <div className="grid grid-cols-2 md:flex md:flex-col gap-2">
+                          {battleData.playerTeam[battleData.playerIdx]?.p?.megaStone && !battleData.playerTeam[battleData.playerIdx]?.p?.megaEvolved && (
+                            <button 
+                              onClick={executeMegaEvolution}
+                              disabled={battleData.turn !== 'player' || battleData.isAuto}
+                              className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl md:rounded-full py-2 md:py-3 px-4 md:px-6 text-sm md:text-xl font-black flex justify-between items-center shadow-lg hover:scale-105 transition-transform active:scale-95 col-span-2 md:col-span-1"
+                            >
+                              <span>MEGA EVOLUCIÓN</span>
+                              <div className="w-5 h-5 md:w-8 md:h-8 rounded-full border-2 border-white/50 flex items-center justify-center">
+                                <Sparkles size={14} className="text-white" />
+                              </div>
+                            </button>
+                          )}
                           <button 
                             onClick={() => setBattleData(prev => prev ? { ...prev, showMoves: true } : null)}
                             className="bg-[#1A1A1A] text-white rounded-xl md:rounded-full py-2 md:py-3 px-4 md:px-6 text-sm md:text-xl font-black flex justify-between items-center shadow-lg hover:scale-105 transition-transform active:scale-95"
@@ -5458,35 +5904,35 @@ export default function App() {
               className="space-y-8 pb-20"
             >
               {/* Team Overview */}
-              <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-zinc-900/80 backdrop-blur-xl border border-white/10 rounded-[40px] p-8 md:p-10 flex flex-col md:flex-row items-center gap-10 relative overflow-hidden shadow-2xl">
-                  <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 blur-[120px] rounded-full -mr-48 -mt-48 animate-pulse" />
-                  <div className="absolute bottom-0 left-0 w-64 h-64 bg-rose-600/10 blur-[100px] rounded-full -ml-32 -mb-32" />
+              <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+                <div className="lg:col-span-2 bg-zinc-900/80 backdrop-blur-xl border border-white/10 rounded-[32px] md:rounded-[40px] p-6 md:p-10 flex flex-col md:flex-row items-center gap-6 md:gap-10 relative overflow-hidden shadow-2xl">
+                  <div className="absolute top-0 right-0 w-64 md:w-96 h-64 md:h-96 bg-indigo-600/10 blur-[80px] md:blur-[120px] rounded-full -mr-32 md:-mr-48 -mt-32 md:-mt-48 animate-pulse" />
+                  <div className="absolute bottom-0 left-0 w-48 md:w-64 h-48 md:h-64 bg-rose-600/10 blur-[70px] md:blur-[100px] rounded-full -ml-24 md:-ml-32 -mb-24 md:-mb-32" />
                   
-                  <div className="relative z-10 text-center md:text-left space-y-4">
+                  <div className="relative z-10 text-center md:text-left space-y-4 w-full md:w-auto">
                     <div>
-                      <h2 className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Poder del Equipo</h2>
-                      <div className="text-9xl font-black tracking-tighter text-white flex items-baseline gap-3 leading-none group cursor-default">
+                      <h2 className="text-zinc-500 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-1 md:mb-2">Poder del Equipo</h2>
+                      <div className="text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-black tracking-tighter text-white flex items-baseline justify-center md:justify-start gap-2 md:gap-3 leading-none group cursor-default">
                         <motion.span 
                           whileHover={{ scale: 1.05, filter: 'brightness(1.2)' }}
                           className={teamOvr < maxTeamOvr ? 'text-red-400' : 'text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-500'}
                         >
                           {teamOvr}
                         </motion.span>
-                        <span className="text-2xl text-rose-500 font-black italic">PWR</span>
+                        <span className="text-xl md:text-2xl text-rose-500 font-black italic">PWR</span>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-3 justify-center md:justify-start">
-                      <div className="bg-white/5 px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-2">
-                        <Users size={16} className="text-indigo-400" />
-                        <span className="text-white font-black">{teamMembers.length}/6</span>
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Activos</span>
+                    <div className="flex flex-wrap gap-2 md:gap-3 justify-center md:justify-start">
+                      <div className="bg-white/5 px-3 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border border-white/10 flex items-center gap-2">
+                        <Users size={14} className="text-indigo-400 md:w-4 md:h-4" />
+                        <span className="text-white font-black text-xs md:text-base">{teamMembers.length}/6</span>
+                        <span className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Activos</span>
                       </div>
-                      <div className="bg-white/5 px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-2">
-                        <Trophy size={16} className="text-amber-400" />
-                        <span className="text-white font-black">{defeatedGyms.length}/8</span>
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Medallas</span>
+                      <div className="bg-white/5 px-3 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border border-white/10 flex items-center gap-2">
+                        <Trophy size={14} className="text-amber-400 md:w-4 md:h-4" />
+                        <span className="text-white font-black text-xs md:text-base">{defeatedGyms.length}/8</span>
+                        <span className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Medallas</span>
                       </div>
                     </div>
 
@@ -5526,7 +5972,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="flex-1 grid grid-cols-3 gap-4 relative z-10 w-full max-w-sm">
+                  <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 relative z-10 w-full max-w-sm">
                     {[...Array(6)].map((_, i) => (
                       <motion.div 
                         key={i} 
@@ -5573,14 +6019,14 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-zinc-900/80 backdrop-blur-xl border border-white/10 rounded-[40px] p-8 flex flex-col justify-center items-center text-center space-y-6 shadow-2xl relative overflow-hidden">
+                <div className="bg-zinc-900/80 backdrop-blur-xl border border-white/10 rounded-[32px] md:rounded-[40px] p-6 md:p-8 flex flex-col justify-center items-center text-center space-y-4 md:space-y-6 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500" />
-                  <div className="w-20 h-20 bg-indigo-600/10 rounded-[32px] flex items-center justify-center text-indigo-500 shadow-inner">
-                    <Activity size={40} />
+                  <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-600/10 rounded-[24px] md:rounded-[32px] flex items-center justify-center text-indigo-500 shadow-inner">
+                    <Activity size={32} className="md:w-10 md:h-10" />
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="text-3xl font-black uppercase italic tracking-tighter text-white">Próximo Desafío</h3>
-                    <p className="text-zinc-500 text-sm font-medium leading-relaxed">Derrota a los líderes de gimnasio para desbloquear nuevas zonas y Pokémon legendarios.</p>
+                  <div className="space-y-1 md:space-y-2">
+                    <h3 className="text-2xl md:text-3xl font-black uppercase italic tracking-tighter text-white">Próximo Desafío</h3>
+                    <p className="text-zinc-500 text-xs md:text-sm font-medium leading-relaxed">Derrota a los líderes de gimnasio para desbloquear nuevas zonas y Pokémon legendarios.</p>
                   </div>
                   <div className="w-full bg-black/40 rounded-2xl p-4 border border-white/5 space-y-3">
                     <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
@@ -5605,28 +6051,28 @@ export default function App() {
               </section>
 
               {/* Collection */}
-              <section id="collection-section" className="space-y-8">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-8">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-8 bg-indigo-500 rounded-full" />
-                      <h2 className="text-4xl font-black uppercase tracking-tight italic text-white">Tu Colección</h2>
+              <section id="collection-section" className="space-y-6 md:space-y-8">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 border-b border-white/5 pb-6 md:pb-8">
+                  <div className="space-y-1 md:space-y-2">
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className="w-1.5 md:w-2 h-6 md:h-8 bg-indigo-500 rounded-full" />
+                      <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tight italic text-white">Tu Colección</h2>
                     </div>
-                    <p className="text-zinc-500 text-sm font-bold uppercase tracking-[0.2em] ml-5">
+                    <p className="text-zinc-500 text-[10px] md:text-sm font-bold uppercase tracking-[0.2em] ml-4 md:ml-5">
                       {collection.length} Pokémon Obtenidos • {teamMembers.length} en Equipo
                     </p>
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    <div className="bg-black/40 rounded-2xl p-1 border border-white/5 flex">
+                    <div className="bg-black/40 rounded-xl md:rounded-2xl p-1 border border-white/5 flex w-full md:w-auto">
                       <button 
                         onClick={() => {
                           setIsBulkTrainingMode(!isBulkTrainingMode);
                           setSelectedForBulkTrain([]);
                         }}
-                        className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${isBulkTrainingMode ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+                        className={`flex-1 md:flex-none px-4 md:px-6 py-2.5 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${isBulkTrainingMode ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
                       >
-                        <Dumbbell size={14} />
+                        <Dumbbell size={12} className="md:w-[14px] md:h-[14px]" />
                         {isBulkTrainingMode ? 'Cancelar' : 'Entrenamiento Masivo'}
                       </button>
                     </div>
@@ -5691,7 +6137,7 @@ export default function App() {
                   )}
                 </AnimatePresence>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 md:gap-6">
                       {collection?.map(p => (
                         <div key={p.instanceId} className="relative cursor-pointer" onClick={() => !isBulkTrainingMode && setSelectedPokemon(p)}>
                           <PokemonCardUI 
@@ -5704,7 +6150,7 @@ export default function App() {
                             onRetire={isBulkTrainingMode ? undefined : () => handleRetireToHallOfFame(p.instanceId)}
                             canTrain={tp >= TRAINING_COST_BASE}
                             canPowerUp={stardust >= POWERUP_COST_BASE}
-                            canEvolve={coins >= EVOLUTION_COST}
+                            canEvolve={coins >= currentEvolutionCost}
                             canUseBandita={banditas > 0}
                             canHealFatigue={coins >= Math.floor(p.fatigue * 2 * (1 - (((facilities || []).find(f => f.id === 'medical')?.level || 1) - 1) * 0.1))}
                             isSelected={selectedForBulkTrain.includes(p.instanceId)}
@@ -5734,37 +6180,37 @@ export default function App() {
               className="space-y-8"
             >
               {/* Header Section */}
-              <div className="relative overflow-hidden bg-zinc-900 border border-white/5 rounded-[40px] p-8 md:p-12">
-                <div className="absolute top-0 right-0 p-12 opacity-5">
-                  <Trophy size={200} />
+              <div className="relative overflow-hidden bg-zinc-900 border border-white/5 rounded-[32px] md:rounded-[40px] p-6 md:p-12">
+                <div className="absolute top-0 right-0 p-6 md:p-12 opacity-5">
+                  <Trophy size={160} className="md:w-[200px] md:h-[200px]" />
                 </div>
                 
                 <div className="relative z-10 space-y-6">
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                      <Medal size={32} className="text-white" />
+                    <div className="w-12 h-12 md:w-16 md:h-16 bg-indigo-600 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                      <Medal size={24} className="text-white md:w-8 md:h-8" />
                     </div>
                     <div>
-                      <h2 className="text-4xl md:text-5xl font-black text-white uppercase italic tracking-tighter">Liga Pokémon</h2>
-                      <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">El camino hacia la gloria eterna</p>
+                      <h2 className="text-3xl md:text-5xl font-black text-white uppercase italic tracking-tighter">Liga Pokémon</h2>
+                      <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">El camino hacia la gloria eterna</p>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-4 items-center">
-                    <div className="bg-white/5 border border-white/10 rounded-2xl px-6 py-3 flex items-center gap-3">
-                      <div className="text-amber-400 font-black text-2xl">{defeatedGyms.length}/8</div>
-                      <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500 leading-tight">Medallas<br/>Obtenidas</div>
+                  <div className="flex flex-wrap gap-3 md:gap-4 items-center">
+                    <div className="bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-2 md:py-3 flex items-center gap-3">
+                      <div className="text-amber-400 font-black text-xl md:text-2xl">{defeatedGyms.length}/8</div>
+                      <div className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-zinc-500 leading-tight">Medallas<br/>Obtenidas</div>
                     </div>
                     
                     <button 
                       onClick={() => setShowRankGuide(true)}
-                      className="bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-2xl px-6 py-3 flex items-center gap-3 transition-all group"
+                      className="bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-xl md:rounded-2xl px-4 md:px-6 py-2 md:py-3 flex items-center gap-3 transition-all group"
                     >
-                      <Info size={20} className="text-indigo-400 group-hover:scale-110 transition-transform" />
-                      <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300 leading-tight">Guía de<br/>Rangos</div>
+                      <Info size={18} className="text-indigo-400 group-hover:scale-110 transition-transform" />
+                      <div className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-indigo-300 leading-tight">Guía de<br/>Rangos</div>
                     </button>
                     
-                    <div className="flex-1 h-14 bg-black/40 rounded-2xl border border-white/5 p-2 flex gap-1">
+                    <div className="flex-1 min-w-[200px] h-12 md:h-14 bg-black/40 rounded-xl md:rounded-2xl border border-white/5 p-1.5 md:p-2 flex gap-1">
                       {[...Array(8)].map((_, i) => (
                         <div 
                           key={i} 
@@ -5968,21 +6414,21 @@ export default function App() {
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                   {/* Event Details Card */}
                   <div className="xl:col-span-2 space-y-8">
-                    <div className={`p-8 md:p-12 rounded-[48px] border-2 ${activeEvent.color} bg-zinc-900 relative overflow-hidden group shadow-2xl shadow-amber-500/20`}>
-                      <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-110 transition-transform duration-700">
-                        <div className="text-[200px] leading-none select-none">{activeEvent.icon}</div>
+                    <div className={`p-6 md:p-12 rounded-[32px] md:rounded-[48px] border-2 ${activeEvent.color} bg-zinc-900 relative overflow-hidden group shadow-2xl shadow-amber-500/20`}>
+                      <div className="absolute top-0 right-0 p-6 md:p-12 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                        <div className="text-[120px] md:text-[200px] leading-none select-none">{activeEvent.icon}</div>
                       </div>
                       
-                      <div className="relative z-10 space-y-8">
+                      <div className="relative z-10 space-y-6 md:space-y-8">
                         <div className="space-y-4">
                           <div className="flex items-center gap-4">
-                            <span className="px-4 py-1 rounded-full bg-amber-500 text-black text-[10px] font-black uppercase tracking-widest">Evento Especial</span>
-                            <span className="text-zinc-500 text-xs font-bold uppercase tracking-widest">ID: {activeEvent.id}</span>
+                            <span className="px-3 py-1 rounded-full bg-amber-500 text-black text-[8px] md:text-[10px] font-black uppercase tracking-widest">Evento Especial</span>
+                            <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">ID: {activeEvent.id}</span>
                           </div>
-                          <h3 className="text-6xl md:text-7xl font-black uppercase italic tracking-tighter text-white leading-none">
+                          <h3 className="text-4xl md:text-7xl font-black uppercase italic tracking-tighter text-white leading-none">
                             {activeEvent.title}
                           </h3>
-                          <p className="text-xl text-zinc-400 font-medium leading-relaxed max-w-2xl">
+                          <p className="text-base md:text-xl text-zinc-400 font-medium leading-relaxed max-w-2xl">
                             {activeEvent.description}
                           </p>
                         </div>
@@ -6127,8 +6573,8 @@ export default function App() {
             >
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="space-y-2">
-                  <h2 className="text-5xl font-black uppercase italic tracking-tighter text-white">Centro de Misiones</h2>
-                  <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Completa desafíos para obtener recompensas legendarias</p>
+                  <h2 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter text-white">Centro de Misiones</h2>
+                  <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px] md:text-xs">Completa desafíos para obtener recompensas legendarias</p>
                 </div>
                 {activeEvent && (
                   <div className={`px-6 py-4 rounded-3xl border ${activeEvent.color} bg-white/5 backdrop-blur-xl flex items-center gap-4 shadow-2xl`}>
@@ -6226,23 +6672,148 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-6xl mx-auto space-y-16 py-12"
+              className="max-w-6xl mx-auto space-y-10 md:space-y-16 py-6 md:py-12"
             >
-              <div className="text-center space-y-4">
-                <h2 className="text-5xl font-black tracking-tighter uppercase italic flex items-center justify-center gap-4">
-                  <Store className="text-amber-500" size={48} /> Poké Tienda
+              <div className="text-center space-y-2 md:space-y-4">
+                <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase italic flex items-center justify-center gap-3 md:gap-4">
+                  <Store className="text-amber-500 w-8 h-8 md:w-12 md:h-12" /> Poké Tienda
                 </h2>
-                <p className="text-zinc-400 max-w-lg mx-auto">Recluta nuevos talentos para tu equipo y adquiere recursos esenciales para la aventura.</p>
+                <p className="text-zinc-400 text-sm md:text-base max-w-lg mx-auto px-4">Recluta nuevos talentos para tu equipo y adquiere recursos esenciales para la aventura.</p>
+              </div>
+
+              {/* Items & Stones */}
+              <div className="space-y-6 md:space-y-8 mt-12">
+                <div className="flex items-center gap-3 md:gap-4 px-4 md:px-0">
+                  <Package className="text-emerald-400 w-6 h-6 md:w-8 md:h-8" />
+                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white">Objetos y Piedras</h3>
+                  <div className="h-px bg-white/10 flex-1 ml-2 md:ml-4" />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4 md:px-0">
+                  {/* Stones */}
+                  {['fire', 'water', 'thunder', 'leaf', 'moon', 'sun', 'shiny', 'dusk', 'dawn', 'ice'].map(stone => {
+                    const stoneNamesES: Record<string, string> = {
+                      fire: 'Fuego', water: 'Agua', thunder: 'Trueno', leaf: 'Hoja', 
+                      moon: 'Lunar', sun: 'Solar', shiny: 'Brillante', dusk: 'Noche', 
+                      dawn: 'Alba', ice: 'Hielo'
+                    };
+                    return (
+                      <div key={stone} className="bg-zinc-900 border border-white/5 rounded-2xl p-4 flex flex-col items-center gap-3 hover:border-white/20 transition-all">
+                        <img 
+                          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${stone}-stone.png`} 
+                          alt={stone}
+                          className="w-12 h-12 object-contain drop-shadow-md"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="text-center">
+                          <div className="font-bold text-white capitalize text-sm">Piedra {stoneNamesES[stone] || stone}</div>
+                          <div className="text-[10px] text-zinc-400">Evolución</div>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            if (coins >= 5000) {
+                              setCoins(c => c - 5000);
+                              setEvolutionStones(prev => ({ ...prev, [stone]: (prev[stone] || 0) + 1 }));
+                              setHistory(prev => [`Compraste Piedra ${stoneNamesES[stone] || stone}.`, ...prev].slice(0, 10));
+                            }
+                          }}
+                          disabled={coins < 5000}
+                          className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] uppercase tracking-wider disabled:opacity-50"
+                        >
+                          5000 🪙
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {/* Mega Stones */}
+                  <div className="bg-zinc-900 border border-white/5 rounded-2xl p-4 flex flex-col items-center gap-3 hover:border-white/20 transition-all col-span-2 md:col-span-4">
+                    <div className="flex gap-4 items-center">
+                      <img 
+                        src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/lucarionite.png" 
+                        alt="Mega Stone"
+                        className="w-12 h-12 object-contain drop-shadow-md"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="text-center">
+                        <div className="font-bold text-white">Mega Piedra Aleatoria</div>
+                        <div className="text-xs text-zinc-400">Desata el poder oculto</div>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (coins >= 10000) {
+                          setCoins(c => c - 10000);
+                          const possibleStones = [
+                            'Charizardite X', 'Charizardite Y', 'Venusaurite', 'Blastoisinite', 'Lucarionite', 
+                            'Gengarite', 'Alakazite', 'Mewtwonite X', 'Mewtwonite Y', 'Rayquazite',
+                            'Scizorite', 'Steelixite', 'Tyranitarite', 'Salamencite', 'Metagrossite', 
+                            'Garchompite', 'Gardevoirite', 'Galladite', 'Aggronite', 'Houndoominite', 
+                            'Manectite', 'Pinsirite', 'Heracronite', 'Banettite', 'Absolite', 
+                            'Medichamite', 'Ampharosite', 'Aerodactylite', 'Mawilite', 'Kangaskhanite', 
+                            'Gyaradosite'
+                          ];
+                          const randomStone = possibleStones[Math.floor(Math.random() * possibleStones.length)];
+                          setMegaStones(prev => [...prev, randomStone]);
+                          setHistory(prev => [`¡Obtuviste ${randomStone}!`, ...prev].slice(0, 10));
+                        }
+                      }}
+                      disabled={coins < 10000}
+                      className="w-full max-w-xs mx-auto py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm uppercase tracking-wider disabled:opacity-50"
+                    >
+                      10000 🪙
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Held Items */}
+              <div className="space-y-6 md:space-y-8 mt-12">
+                <div className="flex items-center gap-3 md:gap-4 px-4 md:px-0">
+                  <ShieldCheck className="text-blue-400 w-6 h-6 md:w-8 md:h-8" />
+                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white">Objetos de Combate</h3>
+                  <div className="h-px bg-white/10 flex-1 ml-2 md:ml-4" />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 px-4 md:px-0">
+                  {HELD_ITEMS.map(item => (
+                    <div key={item.id} className="bg-zinc-900 border border-white/5 rounded-2xl p-4 flex flex-col items-center gap-3 hover:border-white/20 transition-all group relative">
+                      <div className="absolute -top-2 -right-2 bg-zinc-800 text-[8px] font-black px-2 py-1 rounded-full border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none w-32 text-center">
+                        {item.description}
+                      </div>
+                      <img 
+                        src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${item.id}.png`} 
+                        alt={item.name}
+                        className="w-12 h-12 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="text-center">
+                        <div className="font-bold text-white text-[10px] sm:text-xs leading-tight">{item.name}</div>
+                        <div className="text-[8px] text-zinc-500 uppercase tracking-widest mt-1">{item.effect}</div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          if (coins >= item.price) {
+                            setCoins(c => c - item.price);
+                            setHeldItems(prev => ({ ...prev, [item.id]: (prev[item.id] || 0) + 1 }));
+                            setHistory(prev => [`Compraste ${item.name}.`, ...prev].slice(0, 10));
+                          }
+                        }}
+                        disabled={coins < item.price}
+                        className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 mt-auto"
+                      >
+                        {item.price} 🪙
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Stardust Packs (Premium) */}
-              <div className="space-y-8">
-                <div className="flex items-center gap-4">
-                  <Sparkles className="text-fuchsia-400" size={32} />
-                  <h3 className="text-3xl font-black tracking-tighter uppercase italic text-white">Sobres Estelares</h3>
-                  <div className="h-px bg-white/10 flex-1 ml-4" />
+              <div className="space-y-6 md:space-y-8">
+                <div className="flex items-center gap-3 md:gap-4 px-4 md:px-0">
+                  <Sparkles className="text-fuchsia-400 w-6 h-6 md:w-8 md:h-8" />
+                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white">Sobres Estelares</h3>
+                  <div className="h-px bg-white/10 flex-1 ml-2 md:ml-4" />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 px-4 md:px-0">
                   {PACK_TYPES.filter(p => p.costType === 'stardust').map(pack => {
                     const canAfford = stardust >= pack.cost;
                     const getPackGradient = (id: string) => {
@@ -6258,31 +6829,31 @@ export default function App() {
                         key={pack.id} 
                         whileHover={{ y: -10, scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 flex items-center gap-8 group hover:border-white/20 transition-all relative overflow-hidden shadow-xl"
+                        className="bg-zinc-900 border border-white/5 rounded-[24px] md:rounded-[32px] p-6 md:p-8 flex flex-col sm:flex-row items-center gap-6 md:gap-8 group hover:border-white/20 transition-all relative overflow-hidden shadow-xl"
                       >
                         <div className={`absolute inset-0 opacity-5 bg-gradient-to-br ${getPackGradient(pack.id)}`} />
                         
-                        <div className={`w-40 h-56 shrink-0 bg-gradient-to-br ${getPackGradient(pack.id)} rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center group-hover:scale-110 transition-transform duration-500 relative overflow-hidden border border-white/20`}>
+                        <div className={`w-32 h-44 md:w-40 md:h-56 shrink-0 bg-gradient-to-br ${getPackGradient(pack.id)} rounded-xl md:rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center group-hover:scale-110 transition-transform duration-500 relative overflow-hidden border border-white/20`}>
                           <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/30 to-white/0 opacity-0 group-hover:opacity-100 group-hover:animate-shine pointer-events-none" />
-                          <ShoppingBag size={64} className="text-white drop-shadow-md" />
+                          <ShoppingBag size={48} className="text-white drop-shadow-md md:w-16 md:h-16" />
                         </div>
                         
-                        <div className="flex-1 relative z-10 space-y-4">
+                        <div className="flex-1 relative z-10 space-y-3 md:space-y-4 text-center sm:text-left">
                           <div>
-                            <h3 className="text-3xl font-black uppercase italic tracking-tight">{pack.name}</h3>
-                            <p className="text-zinc-400 text-sm mt-2 font-medium leading-relaxed">{pack.description}</p>
+                            <h3 className="text-2xl md:text-3xl font-black uppercase italic tracking-tight">{pack.name}</h3>
+                            <p className="text-zinc-400 text-xs md:text-sm mt-1 md:mt-2 font-medium leading-relaxed">{pack.description}</p>
                           </div>
                           
-                          <div className="text-4xl font-black text-purple-400 flex items-center gap-2">
-                            <Sparkles size={28} />
+                          <div className="text-3xl md:text-4xl font-black text-purple-400 flex items-center justify-center sm:justify-start gap-2">
+                            <Sparkles size={24} className="md:w-7 md:h-7" />
                             {pack.cost} 
-                            <span className="text-xs uppercase tracking-widest text-zinc-500">Polvos</span>
+                            <span className="text-[10px] md:text-xs uppercase tracking-widest text-zinc-500">Polvos</span>
                           </div>
                           
                           <button 
                             onClick={() => handleScout(pack.id)}
                             disabled={!canAfford}
-                            className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${canAfford ? 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+                            className={`w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-black uppercase tracking-widest text-xs md:text-sm transition-all ${canAfford ? 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
                           >
                             Comprar
                           </button>
@@ -6294,13 +6865,13 @@ export default function App() {
               </div>
 
               {/* Coin Packs */}
-              <div className="space-y-8">
-                <div className="flex items-center gap-4">
-                  <Coins className="text-amber-400" size={32} />
-                  <h3 className="text-3xl font-black tracking-tighter uppercase italic text-white">Sobres de Reclutamiento</h3>
-                  <div className="h-px bg-white/10 flex-1 ml-4" />
+              <div className="space-y-6 md:space-y-8">
+                <div className="flex items-center gap-3 md:gap-4 px-4 md:px-0">
+                  <Coins className="text-amber-400 w-6 h-6 md:w-8 md:h-8" />
+                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white">Sobres de Reclutamiento</h3>
+                  <div className="h-px bg-white/10 flex-1 ml-2 md:ml-4" />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6 px-4 md:px-0">
                   {PACK_TYPES.filter(p => p.costType === 'coins').map(pack => {
                     const canAfford = coins >= pack.cost;
                     const getPackGradient = (id: string) => {
@@ -6319,32 +6890,32 @@ export default function App() {
                         key={pack.id} 
                         whileHover={{ y: -10, scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        className="bg-zinc-900 border border-white/5 rounded-[32px] p-6 flex flex-col items-center text-center space-y-6 group hover:border-white/20 transition-all relative overflow-hidden shadow-xl"
+                        className="bg-zinc-900 border border-white/5 rounded-[24px] md:rounded-[32px] p-5 md:p-6 flex flex-col items-center text-center space-y-4 md:space-y-6 group hover:border-white/20 transition-all relative overflow-hidden shadow-xl"
                       >
                         <div className={`absolute inset-0 opacity-5 bg-gradient-to-br ${getPackGradient(pack.id)}`} />
                         
-                        <div className={`w-28 h-40 bg-gradient-to-br ${getPackGradient(pack.id)} rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center group-hover:scale-110 transition-transform duration-500 relative overflow-hidden border border-white/20`}>
+                        <div className={`w-24 h-36 md:w-28 md:h-40 bg-gradient-to-br ${getPackGradient(pack.id)} rounded-xl md:rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center group-hover:scale-110 transition-transform duration-500 relative overflow-hidden border border-white/20`}>
                           <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/30 to-white/0 opacity-0 group-hover:opacity-100 group-hover:animate-shine pointer-events-none" />
-                          <ShoppingBag size={48} className="text-white drop-shadow-md" />
+                          <ShoppingBag size={40} className="text-white drop-shadow-md md:w-12 md:h-12" />
                         </div>
                         
                         <div className="relative z-10 flex-1 flex flex-col justify-between w-full">
                           <div>
-                            <h3 className="text-xl font-black uppercase italic tracking-tight">{pack.name}</h3>
-                            <p className="text-zinc-400 text-[10px] mt-2 font-medium leading-relaxed h-10 flex items-center justify-center">{pack.description}</p>
+                            <h3 className="text-lg md:text-xl font-black uppercase italic tracking-tight">{pack.name}</h3>
+                            <p className="text-zinc-400 text-[9px] md:text-[10px] mt-1 md:mt-2 font-medium leading-relaxed h-8 md:h-10 flex items-center justify-center">{pack.description}</p>
                           </div>
                           
-                          <div className="mt-4 space-y-4">
-                            <div className="text-2xl font-black text-amber-400 flex items-center justify-center gap-2">
-                              <Coins size={16} />
+                          <div className="mt-3 md:mt-4 space-y-3 md:space-y-4">
+                            <div className="text-xl md:text-2xl font-black text-amber-400 flex items-center justify-center gap-2">
+                              <Coins size={14} className="md:w-4 md:h-4" />
                               {pack.cost} 
-                              <span className="text-[10px] uppercase tracking-widest text-zinc-500">Monedas</span>
+                              <span className="text-[9px] md:text-[10px] uppercase tracking-widest text-zinc-500">Monedas</span>
                             </div>
                             
                             <button 
                               onClick={() => handleScout(pack.id)}
                               disabled={!canAfford}
-                              className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${canAfford ? 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+                              className={`w-full py-2.5 md:py-3 rounded-lg md:rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all ${canAfford ? 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
                             >
                               Comprar
                             </button>
@@ -6416,30 +6987,6 @@ export default function App() {
                       className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${coins >= 4500 && energy < 100 ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
                     >
                       {energy >= 100 ? 'Energía Llena' : 'Comprar'}
-                    </button>
-                  </div>
-
-                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 flex flex-col items-center text-center space-y-6 group hover:border-emerald-500/50 transition-all">
-                    <div className="w-32 h-40 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl shadow-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
-                      <Heart size={48} className="text-white/80" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-black uppercase italic">Banditas x5</h3>
-                      <p className="text-zinc-500 text-xs mt-2">Reduce la fatiga de tus Pokémon instantáneamente.</p>
-                    </div>
-                    <div className="text-3xl font-black text-amber-400">300 <span className="text-xs">Monedas</span></div>
-                    <button 
-                      onClick={() => {
-                        if (coins >= 300) {
-                          setCoins(c => Math.max(0, c - 300));
-                          setBanditas(b => b + 5);
-                          setHistory(prev => ["🩹 Has comprado 5 Banditas.", ...prev].slice(0, 10));
-                        }
-                      }}
-                      disabled={coins < 300}
-                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${coins >= 300 ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
-                    >
-                      Comprar
                     </button>
                   </div>
                 </div>
@@ -6523,13 +7070,13 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-5xl mx-auto space-y-12 py-12"
+              className="max-w-5xl mx-auto space-y-8 md:space-y-12 py-6 md:py-12"
             >
               <div className="text-center space-y-4">
-                <h2 className="text-5xl font-black tracking-tighter uppercase italic flex items-center justify-center gap-4">
-                  <Building2 className="text-indigo-500" size={48} /> Instalaciones
+                <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase italic flex items-center justify-center gap-4">
+                  <Building2 className="text-indigo-500" size={32} /> Instalaciones
                 </h2>
-                <p className="text-zinc-400 max-w-lg mx-auto">Mejora tu club para obtener beneficios permanentes en entrenamiento, salud y reclutamiento.</p>
+                <p className="text-zinc-400 max-w-lg mx-auto text-sm md:text-base">Mejora tu club para obtener beneficios permanentes en entrenamiento, salud y reclutamiento.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -6591,13 +7138,13 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-5xl mx-auto space-y-12 py-12"
+              className="max-w-5xl mx-auto space-y-8 md:space-y-12 py-6 md:py-12"
             >
               <div className="text-center space-y-4">
-                <h2 className="text-5xl font-black tracking-tighter uppercase italic flex items-center justify-center gap-4">
-                  <Users className="text-rose-500" size={48} /> Cuerpo Técnico
+                <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase italic flex items-center justify-center gap-4">
+                  <Users className="text-rose-500" size={32} /> Cuerpo Técnico
                 </h2>
-                <p className="text-zinc-400 max-w-lg mx-auto">Contrata especialistas para potenciar diferentes áreas de tu club.</p>
+                <p className="text-zinc-400 max-w-lg mx-auto text-sm md:text-base">Contrata especialistas para potenciar diferentes áreas de tu club.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -6644,6 +7191,302 @@ export default function App() {
                     </div>
                   );
                 })}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'inventory' && gameState === 'management' && (
+            <motion.div 
+              key="inventory"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8"
+            >
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30">
+                  <Package className="text-indigo-400" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-white uppercase tracking-tight">Inventario</h2>
+                  <p className="text-zinc-400 text-sm">Gestiona tus objetos y piedras evolutivas</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-white uppercase tracking-tight">Piedras Evolutivas</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {Object.entries(evolutionStones).map(([stone, count]) => {
+                      const stoneNamesES: Record<string, string> = {
+                        fire: 'Fuego', water: 'Agua', thunder: 'Trueno', leaf: 'Hoja', 
+                        moon: 'Lunar', sun: 'Solar', shiny: 'Brillante', dusk: 'Noche', 
+                        dawn: 'Alba', ice: 'Hielo'
+                      };
+                      return (count as number) > 0 && (
+                        <div key={stone} className="p-4 rounded-xl border border-white/5 bg-zinc-900/50 flex flex-col items-center justify-center gap-2">
+                          <img 
+                            src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${stone}-stone.png`} 
+                            alt={stone}
+                            className="w-10 h-10 object-contain drop-shadow-md"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="text-xs font-bold text-white capitalize">Piedra {stoneNamesES[stone] || stone}</div>
+                          <div className="text-[10px] text-zinc-400">x{count}</div>
+                        </div>
+                      );
+                    })}
+                    {Object.values(evolutionStones).every(count => count === 0) && (
+                      <div className="col-span-full p-8 text-center text-zinc-500 border border-white/5 rounded-xl bg-zinc-900/50">
+                        No tienes piedras evolutivas
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-white uppercase tracking-tight">Mega Piedras</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {megaStones.map(stone => {
+                      const stoneId = stone.toLowerCase().replace(' ', '-');
+                      return (
+                        <div key={stone} className="p-4 rounded-xl border border-white/5 bg-zinc-900/50 flex flex-col items-center justify-center gap-2">
+                          <img 
+                            src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${stoneId}.png`} 
+                            alt={stone}
+                            className="w-10 h-10 object-contain drop-shadow-md"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="text-[10px] font-bold text-white capitalize text-center leading-tight">{stone}</div>
+                        </div>
+                      );
+                    })}
+                    {megaStones.length === 0 && (
+                      <div className="col-span-full p-8 text-center text-zinc-500 border border-white/5 rounded-xl bg-zinc-900/50">
+                        No tienes mega piedras
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-white uppercase tracking-tight">Objetos de Combate</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {Object.entries(heldItems).map(([itemId, count]) => {
+                      const item = HELD_ITEMS.find(i => i.id === itemId);
+                      return (count as number) > 0 && (
+                        <div key={itemId} className="p-4 rounded-xl border border-white/5 bg-zinc-900/50 flex flex-col items-center justify-center gap-2">
+                          <img 
+                            src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${itemId}.png`} 
+                            alt={itemId}
+                            className="w-10 h-10 object-contain drop-shadow-md"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="text-[10px] font-bold text-white text-center leading-tight">{item?.name || itemId}</div>
+                          <div className="text-[10px] text-zinc-400">x{count}</div>
+                        </div>
+                      );
+                    })}
+                    {Object.values(heldItems).every(count => count === 0) && (
+                      <div className="col-span-full p-8 text-center text-zinc-500 border border-white/5 rounded-xl bg-zinc-900/50">
+                        No tienes objetos de combate
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-white uppercase tracking-tight">Otros Objetos</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="p-4 rounded-xl border border-white/5 bg-zinc-900/50 flex flex-col items-center justify-center gap-2">
+                      <div className="text-2xl">🩹</div>
+                      <div className="text-sm font-bold text-white">Banditas</div>
+                      <div className="text-xs text-zinc-400">x{banditas}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'explore' && gameState === 'management' && (
+            <motion.div
+              key="explore"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8 pb-20"
+            >
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                <div className="space-y-2">
+                  <h2 className="text-5xl font-black uppercase italic tracking-tighter text-white">Explorar</h2>
+                  <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Sal de aventura con tu compañero Pokémon</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Pokemon Selection */}
+                <div className="lg:col-span-1 space-y-4">
+                  <h3 className="text-lg font-bold text-white uppercase tracking-tight flex items-center gap-2">
+                    <Users size={20} className="text-indigo-400" /> Elige un Compañero
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                    {collection.map(p => (
+                      <button
+                        key={p.instanceId}
+                        onClick={() => setSelectedExplorePokemonId(p.instanceId)}
+                        className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 relative overflow-hidden group ${
+                          selectedExplorePokemonId === p.instanceId 
+                            ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/20' 
+                            : 'border-white/5 bg-zinc-900/50 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="absolute top-1 right-1">
+                          <Heart size={10} className={p.happiness > 200 ? 'text-rose-500' : 'text-zinc-600'} fill={p.happiness > 200 ? 'currentColor' : 'none'} />
+                        </div>
+                        <img 
+                          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
+                          alt={p.name}
+                          className="w-16 h-16 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="text-[10px] font-black text-white uppercase truncate w-full text-center">{p.name}</div>
+                        <div className="text-[8px] font-bold text-zinc-500 uppercase">Felicidad: {Math.floor((p.happiness / 255) * 100)}%</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Exploration Area */}
+                <div className="lg:col-span-2 space-y-6">
+                  <div className="bg-zinc-900 border border-white/5 rounded-[32px] p-8 md:p-12 text-center space-y-8 relative overflow-hidden min-h-[400px] flex flex-col items-center justify-center">
+                    <div className="absolute inset-0 opacity-5 pointer-events-none">
+                      <MapIcon size={400} className="absolute -bottom-20 -right-20" />
+                    </div>
+
+                    {!isExploring && !exploreResult && (
+                      <div className="relative z-10 space-y-8 max-w-md mx-auto">
+                        <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto border border-emerald-500/20">
+                          <MapIcon size={48} className="text-emerald-500" />
+                        </div>
+                        <div className="space-y-4">
+                          <h3 className="text-3xl font-black uppercase italic text-white">¿Listo para la aventura?</h3>
+                          <p className="text-zinc-400 text-sm leading-relaxed">
+                            Explora los alrededores con tu Pokémon seleccionado. Podrás encontrar objetos raros, monedas o fortalecer tu vínculo.
+                          </p>
+                        </div>
+
+                        <div className="pt-4">
+                          <button
+                            onClick={() => {
+                              if (energy < 1 || !selectedExplorePokemonId) return;
+                              setEnergy(e => e - 1);
+                              setIsExploring(true);
+                              setExploreResult(null);
+                              setHistory(prev => [`Saliste a explorar con tu Pokémon...`, ...prev].slice(0, 10));
+                              updateMissionProgress('explore', 1);
+                              
+                              setTimeout(() => {
+                                const rand = Math.random();
+                                const pokemon = collection.find(p => p.instanceId === selectedExplorePokemonId);
+                                
+                                if (rand < 0.1) { // Reduced from 0.3 to 0.1 for rarity
+                                  const items = ['fire', 'water', 'thunder', 'leaf', 'moon', 'sun', 'shiny', 'dusk', 'dawn', 'ice'];
+                                  const item = items[Math.floor(Math.random() * items.length)];
+                                  const stoneNamesES: Record<string, string> = {
+                                    fire: 'Fuego', water: 'Agua', thunder: 'Trueno', leaf: 'Hoja', 
+                                    moon: 'Lunar', sun: 'Solar', shiny: 'Brillante', dusk: 'Noche', 
+                                    dawn: 'Alba', ice: 'Hielo'
+                                  };
+                                  setEvolutionStones(prev => ({ ...prev, [item]: (prev[item] || 0) + 1 }));
+                                  setExploreResult({ type: 'item', value: stoneNamesES[item] || item });
+                                  setHistory(prev => [`¡Encontraste una Piedra ${stoneNamesES[item] || item}!`, ...prev].slice(0, 10));
+                                } else if (rand < 0.5) {
+                                  const amount = Math.floor(Math.random() * 800) + 200;
+                                  setCoins(c => c + amount);
+                                  updateMissionProgress('earn_coins', amount);
+                                  setExploreResult({ type: 'coins', value: amount });
+                                  setHistory(prev => [`¡Encontraste ${amount} 🪙 en el suelo!`, ...prev].slice(0, 10));
+                                } else if (rand < 0.9 && pokemon) {
+                                  const currentHappiness = pokemon.happiness || 0;
+                                  const increase = Math.floor(Math.random() * 30) + 15;
+                                  const newHappiness = Math.min(255, currentHappiness + increase);
+                                  setCollection(prev => prev.map(p => p.instanceId === pokemon.instanceId ? { ...p, happiness: newHappiness } : p));
+                                  updateMissionProgress('increase_happiness', 1);
+                                  setExploreResult({ type: 'happiness', value: Math.floor((increase/255)*100), pokemonName: pokemon.name });
+                                  setHistory(prev => [`¡Pasaste un buen rato jugando con ${pokemon.name}! Su felicidad aumentó.`, ...prev].slice(0, 10));
+                                } else {
+                                  setExploreResult({ type: 'nothing', value: null });
+                                  setHistory(prev => [`Exploraste la zona pero no encontraste nada interesante esta vez.`, ...prev].slice(0, 10));
+                                }
+                                setIsExploring(false);
+                              }, 2500);
+                            }}
+                            disabled={energy < 1 || !selectedExplorePokemonId}
+                            className={`w-full py-6 rounded-[24px] text-xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-4 shadow-2xl ${
+                              energy >= 1 && selectedExplorePokemonId
+                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-105 active:scale-95 shadow-emerald-500/20'
+                                : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                            }`}
+                          >
+                            <MapIcon size={24} />
+                            {!selectedExplorePokemonId ? 'Elige un Pokémon' : `Explorar (1 Energía)`}
+                          </button>
+                          {energy < 1 && (
+                            <p className="text-rose-500 text-[10px] font-bold uppercase mt-4 tracking-widest">Sin energía suficiente</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {isExploring && (
+                      <div className="relative z-10 space-y-8 animate-pulse">
+                        <div className="w-32 h-32 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto border-4 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+                        <div className="space-y-2">
+                          <h3 className="text-3xl font-black uppercase italic text-white">Explorando...</h3>
+                          <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Tu Pokémon está buscando algo interesante</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {exploreResult && (
+                      <motion.div 
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="relative z-10 space-y-8 max-w-md mx-auto"
+                      >
+                        <div className="w-32 h-32 rounded-full bg-white/5 flex items-center justify-center mx-auto border border-white/10 shadow-2xl">
+                          {exploreResult.type === 'item' && <div className="text-6xl animate-bounce">💎</div>}
+                          {exploreResult.type === 'coins' && <div className="text-6xl animate-bounce">🪙</div>}
+                          {exploreResult.type === 'happiness' && <div className="text-6xl animate-bounce">❤️</div>}
+                          {exploreResult.type === 'nothing' && <div className="text-6xl opacity-50">🍃</div>}
+                        </div>
+
+                        <div className="space-y-4">
+                          <h3 className="text-4xl font-black uppercase italic text-white">
+                            {exploreResult.type === 'item' && '¡Hallazgo Raro!'}
+                            {exploreResult.type === 'coins' && '¡Tesoro Encontrado!'}
+                            {exploreResult.type === 'happiness' && '¡Vínculo Reforzado!'}
+                            {exploreResult.type === 'nothing' && 'Nada por aquí'}
+                          </h3>
+                          <p className="text-zinc-400 text-lg">
+                            {exploreResult.type === 'item' && `Has encontrado una Piedra ${exploreResult.value}.`}
+                            {exploreResult.type === 'coins' && `Has recolectado ${exploreResult.value} monedas.`}
+                            {exploreResult.type === 'happiness' && `La felicidad de ${exploreResult.pokemonName} ha aumentado.`}
+                            {exploreResult.type === 'nothing' && 'No has encontrado nada esta vez, pero la caminata fue agradable.'}
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => setExploreResult(null)}
+                          className="px-12 py-4 rounded-2xl bg-white text-black font-black uppercase tracking-widest text-sm hover:bg-zinc-200 transition-all"
+                        >
+                          Continuar
+                        </button>
+                      </motion.div>
+                    )}
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -6714,8 +7557,8 @@ export default function App() {
                     </h2>
                     <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Semana {currentWeek} / 15</div>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                  <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <table className="w-full text-left min-w-[500px]">
                       <thead>
                         <tr className="text-[10px] font-bold text-zinc-500 uppercase border-b border-white/5">
                           <th className="pb-4">Pos</th>
@@ -7064,11 +7907,11 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="space-y-8"
             >
-              <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-black uppercase italic tracking-tighter flex items-center gap-3 text-white">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h2 className="text-2xl md:text-3xl font-black uppercase italic tracking-tighter flex items-center gap-3 text-white">
                   <FlaskConical className="text-indigo-400" /> Laboratorio de Mejora
                 </h2>
-                <div className="text-xs font-bold text-white uppercase tracking-widest">
+                <div className="text-[10px] md:text-xs font-bold text-white uppercase tracking-widest">
                   Mejora y Evoluciona tus Pokémon
                 </div>
               </div>
@@ -7139,25 +7982,25 @@ export default function App() {
                       const canEvolve = p.level >= (p.evolutionLevel || Infinity);
 
                       return (
-                        <div className="bg-zinc-900 border border-white/5 rounded-[40px] p-8 lg:p-12 grid grid-cols-1 md:grid-cols-2 gap-12 relative overflow-hidden">
-                          <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/5 blur-[120px] rounded-full -mr-48 -mt-48" />
+                        <div className="bg-zinc-900 border border-white/5 rounded-[32px] md:rounded-[40px] p-6 md:p-8 lg:p-12 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-64 md:w-96 h-64 md:h-96 bg-indigo-600/5 blur-[80px] md:blur-[120px] rounded-full -mr-32 md:-mr-48 -mt-32 md:-mt-48" />
                           
                           {/* Left Side: Visuals */}
-                          <div className="space-y-8 relative z-10">
-                            <div className={`aspect-square rounded-[32px] bg-gradient-to-br ${config.bg} border-2 ${config.border} flex items-center justify-center relative group`}>
-                              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-[30px]" />
+                          <div className="space-y-6 md:space-y-8 relative z-10">
+                            <div className={`aspect-square rounded-[24px] md:rounded-[32px] bg-gradient-to-br ${config.bg} border-2 ${config.border} flex items-center justify-center relative group`}>
+                              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-[22px] md:rounded-[30px]" />
                               <img 
                                 src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
                                 alt={p.name}
-                                className="w-64 h-64 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]"
+                                className="w-48 h-48 md:w-64 md:h-64 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]"
                                 referrerPolicy="no-referrer"
                               />
-                              <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-xs font-black italic uppercase text-white">
+                              <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-3 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border border-white/10 text-[10px] md:text-xs font-black italic uppercase text-white">
                                 LVL {p.level}
                               </div>
                               {p.fatigue > 70 && (
-                                <div className="absolute top-4 right-4 bg-rose-600 text-white px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 animate-pulse shadow-lg shadow-rose-500/20">
-                                  <AlertTriangle size={12} /> Agotado
+                                <div className="absolute top-4 right-4 bg-rose-600 text-white px-2 md:px-3 py-1 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 md:gap-2 animate-pulse shadow-lg shadow-rose-500/20">
+                                  <AlertTriangle size={10} className="md:w-3 md:h-3" /> Agotado
                                 </div>
                               )}
                             </div>
@@ -7165,36 +8008,36 @@ export default function App() {
                             {canEvolve && (
                               <button
                                 onClick={() => evolvePokemon(p)}
-                                className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-purple-500/20 transition-all"
+                                className="w-full py-3 md:py-4 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-widest text-xs md:text-sm rounded-xl md:rounded-2xl shadow-lg shadow-purple-500/20 transition-all"
                               >
                                 Evolucionar
                               </button>
                             )}
 
-                            <div className="grid grid-cols-3 gap-4">
-                              <div className="bg-black/40 rounded-2xl p-4 border border-white/5 text-center">
-                                <div className="text-[8px] font-bold text-zinc-300 uppercase mb-1">Ataque</div>
-                                <div className="text-2xl font-black text-white">{p.atk}</div>
+                            <div className="grid grid-cols-3 gap-3 md:gap-4">
+                              <div className="bg-black/40 rounded-xl md:rounded-2xl p-3 md:p-4 border border-white/5 text-center">
+                                <div className="text-[7px] md:text-[8px] font-bold text-zinc-300 uppercase mb-1">Ataque</div>
+                                <div className="text-lg md:text-2xl font-black text-white">{p.atk}</div>
                               </div>
-                              <div className="bg-black/40 rounded-2xl p-4 border border-white/10 text-center">
-                                <div className="text-[8px] font-bold text-zinc-300 uppercase mb-1">Defensa</div>
-                                <div className="text-2xl font-black text-white">{p.def}</div>
+                              <div className="bg-black/40 rounded-xl md:rounded-2xl p-3 md:p-4 border border-white/10 text-center">
+                                <div className="text-[7px] md:text-[8px] font-bold text-zinc-300 uppercase mb-1">Defensa</div>
+                                <div className="text-lg md:text-2xl font-black text-white">{p.def}</div>
                               </div>
-                              <div className="bg-black/40 rounded-2xl p-4 border border-white/10 text-center">
-                                <div className="text-[8px] font-bold text-zinc-300 uppercase mb-1">Velocidad</div>
-                                <div className="text-2xl font-black text-white">{p.spe}</div>
+                              <div className="bg-black/40 rounded-xl md:rounded-2xl p-3 md:p-4 border border-white/10 text-center">
+                                <div className="text-[7px] md:text-[8px] font-bold text-zinc-300 uppercase mb-1">Velocidad</div>
+                                <div className="text-lg md:text-2xl font-black text-white">{p.spe}</div>
                               </div>
                             </div>
                           </div>
 
                           {/* Right Side: Controls */}
-                          <div className="space-y-8 relative z-10">
+                          <div className="space-y-6 md:space-y-8 relative z-10">
                             <div>
-                              <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">{p.rarity} Pokémon</div>
-                              <h3 className="text-5xl font-black italic uppercase tracking-tighter text-white mb-2">{p.name}</h3>
+                              <div className="text-[8px] md:text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">{p.rarity} Pokémon</div>
+                              <h3 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter text-white mb-2">{p.name}</h3>
                               <div className="flex gap-2">
                                 {p.types?.map(t => (
-                                  <span key={t} className="px-3 py-1 bg-white/5 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/5 text-zinc-400">{t}</span>
+                                  <span key={t} className="px-2 md:px-3 py-1 bg-white/5 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-widest border border-white/5 text-zinc-400">{t}</span>
                                 ))}
                               </div>
                             </div>
@@ -7375,7 +8218,7 @@ export default function App() {
                                   >
                                     <Dna size={24} /> Evolucionar Pokémon
                                   </button>
-                                  <div className="text-center mt-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Coste: {EVOLUTION_COST} Monedas</div>
+                                  <div className="text-center mt-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Coste: {currentEvolutionCost} Monedas</div>
                                 </div>
                               )}
 
@@ -7437,7 +8280,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-4">
+              <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-4">
                 {POKEDEX_BASE.map(p => {
                   const isUnlocked = pokedex.includes(p.id);
                   return (
@@ -7477,8 +8320,8 @@ export default function App() {
               className="space-y-12 pb-24"
             >
               <div className="text-center space-y-4">
-                <h2 className="text-6xl font-black tracking-tighter uppercase italic flex items-center justify-center gap-6">
-                  <Award className="text-amber-500" size={64} /> Salón de la Fama
+                <h2 className="text-4xl sm:text-6xl font-black tracking-tighter uppercase italic flex items-center justify-center gap-4 sm:gap-6">
+                  <Award size={48} className="text-amber-500 sm:w-16 sm:h-16" /> Salón de la Fama
                 </h2>
                 <p className="text-zinc-400 max-w-2xl mx-auto text-lg">
                   Honramos a las leyendas que alcanzaron la cima de su potencial. 
@@ -7596,7 +8439,7 @@ export default function App() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Símbolo del Equipo</label>
-                      <div className="grid grid-cols-6 sm:grid-cols-10 gap-2 p-4 bg-black/40 border border-white/5 rounded-2xl">
+                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 p-4 bg-black/40 border border-white/5 rounded-2xl">
                         {['🛡️', '⚔️', '🔥', '💧', '⚡', '🍃', '❄️', '🌑', '🌟', '🐉', '🦅', '🐺', '🦁', '🐍', '🐻', '🦊', '🦉', '🦇', '🦈', '🐙'].map(emoji => (
                           <button
                             key={emoji}
@@ -7804,6 +8647,7 @@ export default function App() {
           <div className="flex items-center gap-1 bg-zinc-800/50 p-1 rounded-2xl border border-white/5 overflow-x-auto no-scrollbar max-w-full">
             {[
               { id: 'team', icon: Users, label: 'Equipo' },
+              { id: 'inventory', icon: Package, label: 'Inventario' },
               { id: 'lab', icon: FlaskConical, label: 'Lab' },
               { id: 'shop', icon: ShoppingBag, label: 'Tienda' },
               { id: 'market', icon: Store, label: 'Mercado' },
@@ -8706,18 +9550,18 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent" />
                   
                   {/* Badges */}
-                  <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex flex-col gap-2 z-20">
-                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${RARITY_CONFIG[selectedPokemon.rarity].color} bg-black/40 backdrop-blur-sm border border-white/10`}>
+                  <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex flex-col gap-1.5 md:gap-2 z-20">
+                    <div className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-wider ${RARITY_CONFIG[selectedPokemon.rarity].color} bg-black/40 backdrop-blur-sm border border-white/10`}>
                       {selectedPokemon.rarity}
                     </div>
                     {selectedPokemon.limitBroken && (
-                      <div className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-500/80 text-white border border-rose-500/50 flex items-center gap-1">
-                        <Zap size={10} /> Limit Broken
+                      <div className="px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[8px] md:text-[10px] font-bold bg-rose-500/80 text-white border border-rose-500/50 flex items-center gap-1">
+                        <Zap size={8} className="md:w-[10px] md:h-[10px]" /> Limit Broken
                       </div>
                     )}
                     {selectedPokemon.isInjured && (
-                      <div className="px-3 py-1 rounded-full text-[10px] font-bold bg-red-500/80 text-white border border-red-500/50 flex items-center gap-1">
-                        <Heart size={10} /> Lesionado ({selectedPokemon.injuryWeeks} sem)
+                      <div className="px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[8px] md:text-[10px] font-bold bg-red-500/80 text-white border border-red-500/50 flex items-center gap-1">
+                        <Heart size={8} className="md:w-[10px] md:h-[10px]" /> Lesionado ({selectedPokemon.injuryWeeks} sem)
                       </div>
                     )}
                   </div>
@@ -8725,45 +9569,45 @@ export default function App() {
                   <motion.img 
                     layoutId={`pokemon-img-${selectedPokemon.instanceId}`}
                     src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${selectedPokemon.id}.png`}
-                    className={`w-40 h-40 sm:w-48 sm:h-48 md:w-64 md:h-64 object-contain relative z-10 drop-shadow-[0_0_50px_rgba(255,255,255,0.2)] ${selectedPokemon.isInjured ? 'grayscale opacity-50' : ''}`}
+                    className={`w-36 h-36 sm:w-48 sm:h-48 md:w-64 md:h-64 object-contain relative z-10 drop-shadow-[0_0_50px_rgba(255,255,255,0.2)] ${selectedPokemon.isInjured ? 'grayscale opacity-50' : ''}`}
                     referrerPolicy="no-referrer"
                   />
 
-                  <div className="relative z-10 w-full mt-4 sm:mt-6 space-y-4">
+                  <div className="relative z-10 w-full mt-2 sm:mt-6 space-y-3 md:space-y-4">
                     <div className="text-center">
-                      <h2 className="text-3xl sm:text-4xl md:text-5xl font-black italic uppercase tracking-tighter text-white truncate px-2">{selectedPokemon.name}</h2>
-                      <div className="flex justify-center gap-2 mt-2">
+                      <h2 className="text-2xl sm:text-4xl md:text-5xl font-black italic uppercase tracking-tighter text-white truncate px-2">{selectedPokemon.name}</h2>
+                      <div className="flex justify-center gap-1.5 md:gap-2 mt-1 md:mt-2">
                         {selectedPokemon?.types?.map(t => (
-                          <span key={t} className="px-3 py-1 bg-white/5 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/5 text-zinc-400">{t}</span>
+                          <span key={t} className="px-2 md:px-3 py-0.5 md:py-1 bg-white/5 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-widest border border-white/5 text-zinc-400">{t}</span>
                         ))}
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-center gap-4 bg-black/30 rounded-2xl p-4 border border-white/5">
+                    <div className="flex items-center justify-center gap-3 md:gap-4 bg-black/30 rounded-xl md:rounded-2xl p-3 md:p-4 border border-white/5">
                       <div className="text-center">
-                        <div className="text-5xl font-black text-rose-500 leading-none">{selectedPokemon.ovr}</div>
-                        <div className="text-[10px] font-bold text-rose-500/60 uppercase tracking-widest mt-1">Poder Total</div>
+                        <div className="text-3xl md:text-5xl font-black text-rose-500 leading-none">{selectedPokemon.ovr}</div>
+                        <div className="text-[8px] md:text-[10px] font-bold text-rose-500/60 uppercase tracking-widest mt-1">Poder Total</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Right Column: Details & Stats */}
-                <div className="flex-1 p-6 md:p-10 flex flex-col space-y-8">
+                <div className="flex-1 p-5 md:p-10 flex flex-col space-y-6 md:space-y-8">
                   
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-3 gap-3 md:gap-6">
-                    <div className="bg-black/40 rounded-2xl p-3 md:p-4 border border-white/5 text-center">
-                      <div className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Ataque</div>
-                      <div className="text-xl md:text-2xl font-black text-white">{selectedPokemon.atk}</div>
+                  <div className="grid grid-cols-3 gap-2 md:gap-6">
+                    <div className="bg-black/40 rounded-xl md:rounded-2xl p-2 md:p-4 border border-white/5 text-center">
+                      <div className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase mb-0.5 md:mb-1">Ataque</div>
+                      <div className="text-lg md:text-2xl font-black text-white">{selectedPokemon.atk}</div>
                     </div>
-                    <div className="bg-black/40 rounded-2xl p-3 md:p-4 border border-white/5 text-center">
-                      <div className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Defensa</div>
-                      <div className="text-xl md:text-2xl font-black text-white">{selectedPokemon.def}</div>
+                    <div className="bg-black/40 rounded-xl md:rounded-2xl p-2 md:p-4 border border-white/5 text-center">
+                      <div className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase mb-0.5 md:mb-1">Defensa</div>
+                      <div className="text-lg md:text-2xl font-black text-white">{selectedPokemon.def}</div>
                     </div>
-                    <div className="bg-black/40 rounded-2xl p-3 md:p-4 border border-white/5 text-center">
-                      <div className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Velocidad</div>
-                      <div className="text-xl md:text-2xl font-black text-white">{selectedPokemon.spe}</div>
+                    <div className="bg-black/40 rounded-xl md:rounded-2xl p-2 md:p-4 border border-white/5 text-center">
+                      <div className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase mb-0.5 md:mb-1">Velocidad</div>
+                      <div className="text-lg md:text-2xl font-black text-white">{selectedPokemon.spe}</div>
                     </div>
                   </div>
 
@@ -8918,6 +9762,72 @@ export default function App() {
                     <Heart size={16} /> Curar ({banditas})
                   </button>
                 )}
+                {selectedPokemon.megaStone ? (
+                  <button 
+                    onClick={() => handleUnequipMegaStone(selectedPokemon.instanceId)}
+                    className="w-full sm:flex-1 py-3 md:py-4 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 text-xs md:text-sm bg-purple-600 hover:bg-purple-500 text-white"
+                  >
+                    <Zap size={16} /> Quitar {selectedPokemon.megaStone}
+                  </button>
+                ) : (() => {
+                  const compatibleStones = megaStones.filter(s => {
+                    const stone = s.toLowerCase();
+                    const name = selectedPokemon.name.toLowerCase();
+                    if (name === 'charizard') return stone.includes('charizardite');
+                    if (name === 'venusaur') return stone.includes('venusaurite');
+                    if (name === 'blastoise') return stone.includes('blastoisinite');
+                    if (name === 'lucario') return stone.includes('lucarionite');
+                    if (name === 'gengar') return stone.includes('gengarite');
+                    if (name === 'alakazam') return stone.includes('alakazite');
+                    if (name === 'mewtwo') return stone.includes('mewtwonite');
+                    if (name === 'rayquaza') return stone.includes('rayquazite');
+                    if (name === 'scizor') return stone.includes('scizorite');
+                    if (name === 'steelix') return stone.includes('steelixite');
+                    if (name === 'tyranitar') return stone.includes('tyranitarite');
+                    if (name === 'salamence') return stone.includes('salamencite');
+                    if (name === 'metagross') return stone.includes('metagrossite');
+                    if (name === 'garchomp') return stone.includes('garchompite');
+                    if (name === 'gardevoir') return stone.includes('gardevoirite');
+                    if (name === 'gallade') return stone.includes('galladite');
+                    if (name === 'aggron') return stone.includes('aggronite');
+                    if (name === 'houndoom') return stone.includes('houndoominite');
+                    if (name === 'manectric') return stone.includes('manectite');
+                    if (name === 'pinsir') return stone.includes('pinsirite');
+                    if (name === 'heracross') return stone.includes('heracronite');
+                    if (name === 'banette') return stone.includes('banettite');
+                    if (name === 'absol') return stone.includes('absolite');
+                    if (name === 'medicham') return stone.includes('medichamite');
+                    if (name === 'ampharos') return stone.includes('ampharosite');
+                    if (name === 'aerodactyl') return stone.includes('aerodactylite');
+                    if (name === 'mawile') return stone.includes('mawilite');
+                    if (name === 'kangaskhan') return stone.includes('kangaskhanite');
+                    if (name === 'gyarados') return stone.includes('gyaradosite');
+                    return false;
+                  });
+                  return compatibleStones.length > 0 ? (
+                    <button 
+                      onClick={() => handleEquipMegaStone(selectedPokemon.instanceId, compatibleStones[0])}
+                      className="w-full sm:flex-1 py-3 md:py-4 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 text-xs md:text-sm bg-purple-600 hover:bg-purple-500 text-white"
+                    >
+                      <Zap size={16} /> Equipar Mega Piedra
+                    </button>
+                  ) : null;
+                })()}
+                {selectedPokemon.item ? (
+                  <button 
+                    onClick={() => handleUnequipItem(selectedPokemon.instanceId)}
+                    className="w-full sm:flex-1 py-3 md:py-4 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 text-xs md:text-sm bg-blue-600 hover:bg-blue-500 text-white"
+                  >
+                    <Package size={16} /> Quitar {HELD_ITEMS.find(i => i.id === selectedPokemon.item)?.name}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setShowItemSelection(selectedPokemon.instanceId)}
+                    className="w-full sm:flex-1 py-3 md:py-4 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 text-xs md:text-sm bg-blue-600 hover:bg-blue-500 text-white"
+                  >
+                    <Package size={16} /> Equipar Objeto
+                  </button>
+                )}
                 <button 
                   onClick={() => { toggleTeamMember(selectedPokemon.instanceId); setSelectedPokemon(null); }}
                   className={`w-full sm:flex-1 py-3 md:py-4 rounded-2xl font-black uppercase tracking-widest transition-all text-xs md:text-sm ${team.includes(selectedPokemon.instanceId) ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
@@ -9047,6 +9957,168 @@ export default function App() {
         )}
       </AnimatePresence>
       
+      {/* Pending Evolution Modal */}
+      <AnimatePresence>
+        {pendingEvolution && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-white/10 rounded-3xl p-6 max-w-md w-full shadow-2xl"
+            >
+              <h3 className="text-xl font-bold text-white mb-4 text-center">¿Cómo quieres evolucionar a {pendingEvolution.pokemon.name}?</h3>
+              <div className="space-y-3">
+                {pendingEvolution.options.map(opt => {
+                  const nextBase = POKEDEX_BASE.find(b => b.id === opt.id);
+                  if (!nextBase) return null;
+                  const isStone = opt.condition.type === 'stone';
+                  const stoneName = isStone ? opt.condition.value as string : '';
+                  const stoneNamesES: Record<string, string> = {
+                    fire: 'Fuego', water: 'Agua', thunder: 'Trueno', leaf: 'Hoja', 
+                    moon: 'Lunar', sun: 'Solar', shiny: 'Brillante', dusk: 'Noche', 
+                    dawn: 'Alba', ice: 'Hielo'
+                  };
+
+                  return (
+                    <button
+                      key={opt.id}
+                      onClick={() => {
+                        executeEvolution(pendingEvolution.pokemon, opt.id, isStone ? stoneName : undefined);
+                        setPendingEvolution(null);
+                      }}
+                      className="w-full p-4 rounded-xl border border-white/10 bg-zinc-800/50 hover:bg-zinc-800 flex items-center justify-between group transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img 
+                          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${opt.id}.png`} 
+                          alt={nextBase.name} 
+                          className="w-12 h-12" 
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="text-left">
+                          <div className="font-bold text-white group-hover:text-rose-400 transition-colors">{nextBase.name}</div>
+                          <div className="text-xs text-zinc-400">
+                            {isStone ? (
+                              <div className="flex items-center gap-1">
+                                <img 
+                                  src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${stoneName}-stone.png`}
+                                  alt={stoneName}
+                                  className="w-4 h-4 object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <span>Piedra {stoneNamesES[stoneName] || stoneName}</span>
+                              </div>
+                            ) : (
+                              <span>Felicidad: {pendingEvolution.pokemon.happiness}/{opt.condition.value}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="text-zinc-500 group-hover:text-white transition-colors" />
+                    </button>
+                  );
+                })}
+              </div>
+              <button 
+                onClick={() => setPendingEvolution(null)}
+                className="mt-6 w-full py-3 rounded-xl border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Cancelar
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Item Selection Modal */}
+      <AnimatePresence>
+        {showItemSelection && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                <h2 className="text-xl font-black text-white uppercase tracking-tighter">Equipar Objeto</h2>
+                <button onClick={() => setShowItemSelection(null)} className="text-zinc-500 hover:text-white transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-3">
+                {Object.entries(heldItems).filter(([_, count]) => (count as number) > 0).map(([itemId, count]) => {
+                  const item = HELD_ITEMS.find(i => i.id === itemId);
+                  return (
+                    <button
+                      key={itemId}
+                      onClick={() => {
+                        handleEquipItem(showItemSelection, itemId);
+                        setShowItemSelection(null);
+                      }}
+                      className="w-full p-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 transition-all flex items-center gap-4 text-left group"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-black/40 flex items-center justify-center border border-white/10 group-hover:border-blue-500/50 transition-colors">
+                        <img 
+                          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${itemId}.png`} 
+                          alt={itemId}
+                          className="w-8 h-8 object-contain"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-center">
+                          <span className="font-black text-white uppercase text-sm tracking-tight">{item?.name}</span>
+                          <span className="text-[10px] font-bold text-zinc-500">x{count}</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 leading-tight mt-1">{item?.description}</p>
+                        <p className="text-[9px] text-blue-400 font-bold mt-1 italic">{item?.effect}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+                {Object.values(heldItems).every(count => count === 0) && (
+                  <div className="text-center py-12 space-y-4">
+                    <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto text-zinc-600">
+                      <Package size={32} />
+                    </div>
+                    <p className="text-zinc-500 font-bold uppercase text-xs">No tienes objetos disponibles</p>
+                    <button 
+                      onClick={() => {
+                        setShowItemSelection(null);
+                        setActiveTab('shop');
+                      }}
+                      className="text-blue-400 font-black uppercase text-[10px] hover:underline"
+                    >
+                      Ir a la tienda
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="p-4 bg-black/20">
+                <button 
+                  onClick={() => setShowItemSelection(null)}
+                  className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-black uppercase text-xs tracking-widest transition-all"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <TutorialOverlay />
 
     </div>

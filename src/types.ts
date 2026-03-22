@@ -32,6 +32,13 @@ export interface HeldItem {
   value: number;
 }
 
+export interface InventoryItem {
+  id: string;
+  name: string;
+  type: 'stone' | 'item' | 'mega_stone';
+  quantity: number;
+}
+
 export type StatusCondition = 'None' | 'Burn' | 'Sleep' | 'Poison' | 'Paralysis' | 'Freeze';
 
 export interface Move {
@@ -75,6 +82,10 @@ export interface PokemonInstance {
   currentHp: number;
   currentOVR: number;
   status?: StatusCondition;
+
+  // New fields
+  happiness: number; // 0 - 255
+  megaEvolved: boolean;
 }
 
 export interface Facilities {
@@ -105,7 +116,7 @@ export interface Mission {
   reward: number; // coins
   completed: boolean;
   progress: number;
-  target: number;
+  requirement: number;
 }
 
 export interface GameState {
@@ -115,6 +126,7 @@ export interface GameState {
   energy: number;
   trainingPoints: number;
   bandages: number;
+  inventory: InventoryItem[];
 
   // Roster
   roster: PokemonInstance[];
@@ -131,7 +143,7 @@ export interface GameState {
   // League
   currentWeek: number;
   season: number;
-  leagueStandings: { teamName: string; points: number; played: number; won: number; drawn: number; lost: number }[];
+  leagueStandings: { name: string; points: number; played: number; won: number; drawn: number; lost: number; isPlayer?: boolean }[];
 
   // Actions
   addCoins: (amount: number) => void;
@@ -143,4 +155,10 @@ export interface GameState {
   healPokemon: (id: string) => void;
   advanceWeek: () => void;
   completeMission: (id: string) => void;
+  addItem: (item: InventoryItem) => void;
+  removeItem: (itemId: string, quantity: number) => boolean;
+  setCoins: (amount: number) => void;
+  setEnergy: (amount: number) => void;
+  updatePokemon: (id: string, updates: Partial<PokemonInstance>) => void;
+  updateMissionProgress: (action: string, amount: number) => void;
 }

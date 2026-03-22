@@ -15,14 +15,14 @@ const INITIAL_STAFF: Staff = {
 };
 
 const INITIAL_LEAGUE = [
-  { teamName: 'Player Team', points: 0, played: 0, won: 0, drawn: 0, lost: 0 },
-  { teamName: 'Kanto Kings', points: 0, played: 0, won: 0, drawn: 0, lost: 0 },
-  { teamName: 'Johto Juggernauts', points: 0, played: 0, won: 0, drawn: 0, lost: 0 },
-  { teamName: 'Hoenn Heroes', points: 0, played: 0, won: 0, drawn: 0, lost: 0 },
-  { teamName: 'Sinnoh Stars', points: 0, played: 0, won: 0, drawn: 0, lost: 0 },
-  { teamName: 'Unova United', points: 0, played: 0, won: 0, drawn: 0, lost: 0 },
-  { teamName: 'Kalos Knights', points: 0, played: 0, won: 0, drawn: 0, lost: 0 },
-  { teamName: 'Alola Aces', points: 0, played: 0, won: 0, drawn: 0, lost: 0 },
+  { name: 'Player Team', points: 0, played: 0, won: 0, drawn: 0, lost: 0, isPlayer: true },
+  { name: 'Kanto Kings', points: 0, played: 0, won: 0, drawn: 0, lost: 0, isPlayer: false },
+  { name: 'Johto Juggernauts', points: 0, played: 0, won: 0, drawn: 0, lost: 0, isPlayer: false },
+  { name: 'Hoenn Heroes', points: 0, played: 0, won: 0, drawn: 0, lost: 0, isPlayer: false },
+  { name: 'Sinnoh Stars', points: 0, played: 0, won: 0, drawn: 0, lost: 0, isPlayer: false },
+  { name: 'Unova United', points: 0, played: 0, won: 0, drawn: 0, lost: 0, isPlayer: false },
+  { name: 'Kalos Knights', points: 0, played: 0, won: 0, drawn: 0, lost: 0, isPlayer: false },
+  { name: 'Alola Aces', points: 0, played: 0, won: 0, drawn: 0, lost: 0, isPlayer: false },
 ];
 
 // Añadimos las variables de desarrollador al tipo del store para que TypeScript las reconozca
@@ -40,6 +40,7 @@ export const useGameStore = create<DevGameState>()(
       energy: 100,
       trainingPoints: 2000,
       bandages: 5,
+      inventory: [],
 
       roster: [],
       activeTeamIds: [],
@@ -52,8 +53,8 @@ export const useGameStore = create<DevGameState>()(
       leagueStandings: INITIAL_LEAGUE,
       badges: [],
       missions: [
-        { id: '1', title: 'Win 5 matches', description: 'Win 5 matches in the league', reward: 1000, completed: false, progress: 0, target: 5 },
-        { id: '2', title: 'Collect 10 Pokémon', description: 'Collect 10 Pokémon in your roster', reward: 2000, completed: false, progress: 0, target: 10 },
+        { id: '1', title: 'Win 5 matches', description: 'Win 5 matches in the league', reward: 1000, completed: false, progress: 0, requirement: 5 },
+        { id: '2', title: 'Collect 10 Pokémon', description: 'Collect 10 Pokémon in your roster', reward: 2000, completed: false, progress: 0, requirement: 10 },
       ],
 
       loadState: (newState) => set((state) => ({ ...state, ...newState })),
@@ -75,6 +76,22 @@ export const useGameStore = create<DevGameState>()(
         return false;
       },
       // ----------------------------------------
+
+      setCoins: (amount) => set({ coins: amount }),
+      setEnergy: (amount) => set({ energy: amount }),
+      updatePokemon: (id, updates) => set((state) => ({
+        roster: state.roster.map(p => p.id === id ? { ...p, ...updates } : p)
+      })),
+      updateMissionProgress: (action, amount) => set((state) => {
+        // Basic implementation for now
+        return {
+          missions: state.missions.map(m => {
+            if (m.completed) return m;
+            // This is a simplified version of the logic in App.tsx
+            return { ...m, progress: Math.min(m.requirement, m.progress + amount) };
+          })
+        };
+      }),
 
       addCoins: (amount) => set((state) => ({ coins: state.coins + amount })),
       spendCoins: (amount) => {
@@ -136,7 +153,7 @@ export const useGameStore = create<DevGameState>()(
       }),
       completeMission: (id) => set((state) => {
         const mission = state.missions.find(m => m.id === id);
-        if (mission && !mission.completed && mission.progress >= mission.target) {
+        if (mission && !mission.completed && mission.progress >= mission.requirement) {
           return {
             coins: state.coins + mission.reward,
             missions: state.missions.map(m => m.id === id ? { ...m, completed: true } : m)
@@ -144,6 +161,26 @@ export const useGameStore = create<DevGameState>()(
         }
         return state;
       }),
+      addItem: (item) => set((state) => {
+        const existingItem = state.inventory.find(i => i.id === item.id);
+        if (existingItem) {
+          return {
+            inventory: state.inventory.map(i => i.id === item.id ? { ...i, quantity: i.quantity + item.quantity } : i)
+          };
+        }
+        return { inventory: [...state.inventory, item] };
+      }),
+      removeItem: (itemId, quantity) => {
+        const state = get();
+        const item = state.inventory.find(i => i.id === itemId);
+        if (item && item.quantity >= quantity) {
+          set({
+            inventory: state.inventory.map(i => i.id === itemId ? { ...i, quantity: i.quantity - quantity } : i).filter(i => i.quantity > 0)
+          });
+          return true;
+        }
+        return false;
+      },
     }),
     {
       name: 'pokemon-league-manager-storage',

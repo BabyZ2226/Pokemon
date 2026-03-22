@@ -176,7 +176,9 @@ export async function fetchPokemonData(idOrName: string | number, rarity: Rarity
     injuryDaysRemaining: 0,
     currentStats,
     currentHp: currentStats.hp,
-    currentOVR: ovr
+    currentOVR: ovr,
+    happiness: 70,
+    megaEvolved: false
   };
 }
 

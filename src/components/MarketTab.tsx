@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { PokemonInstance } from '../types';
 import { generatePokemon } from '../utils/pokemonGenerator';
+import { motion } from 'framer-motion';
+import { TrendingUp } from 'lucide-react';
 
 export default function MarketTab() {
   const { coins, spendCoins, addCoins, roster, addPokemon, staff } = useGameStore();
@@ -67,47 +69,77 @@ export default function MarketTab() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div>
-        <h2 className="text-2xl font-bold text-white mb-6">Transfer Market</h2>
+        <div className="flex items-center gap-4 mb-8 md:mb-12">
+          <div className="w-12 h-12 bg-indigo-600/20 rounded-2xl flex items-center justify-center text-indigo-400 border border-indigo-500/20">
+            <TrendingUp size={24} />
+          </div>
+          <h2 className="text-3xl md:text-5xl font-black text-white uppercase italic tracking-tighter">Mercado de Transferencias</h2>
+        </div>
         
         {loading ? (
-          <div className="text-center text-slate-300 py-12">Scouting players...</div>
+          <div className="flex flex-col items-center justify-center py-20 space-y-4">
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full"
+            />
+            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Buscando jugadores...</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {marketListings.map(p => (
-              <div key={p.id} className="bg-slate-800 rounded-xl p-4 border border-slate-700 flex flex-col">
-                <div className="flex justify-between items-start mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+            {marketListings.map((p, idx) => (
+              <motion.div 
+                key={p.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                className="bg-zinc-900/50 rounded-[32px] p-6 border border-white/10 flex flex-col group hover:border-indigo-500/30 transition-all shadow-xl hover:shadow-indigo-500/5"
+              >
+                <div className="flex justify-between items-start mb-6">
                   <div>
-                    <h3 className="text-lg font-bold text-white">{p.name} {p.isShiny && '✨'}</h3>
-                    <p className="text-sm text-white">Lv. {p.level} • {p.rarity}</p>
+                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">
+                      {p.name} {p.isShiny && <span className="text-yellow-400">✨</span>}
+                    </h3>
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">
+                      Nv. {p.level} • {p.rarity}
+                    </p>
                   </div>
-                  <span className="text-xs font-mono bg-slate-900 px-2 py-1 rounded text-white">OVR {p.currentOVR}</span>
+                  <div className="bg-black/40 px-3 py-1 rounded-xl border border-white/5">
+                    <span className="text-xs font-black text-indigo-400 uppercase tracking-tighter">OVR {p.currentOVR}</span>
+                  </div>
                 </div>
                 
-                <div className="flex-1 flex items-center justify-center py-4">
-                  <img src={p.sprite} alt={p.name} className="w-24 h-24 object-contain drop-shadow-lg" />
+                <div className="flex-1 flex items-center justify-center py-8 relative group/sprite">
+                  <div className="absolute inset-0 bg-indigo-500/5 rounded-full blur-3xl opacity-0 group-hover/sprite:opacity-100 transition-opacity" />
+                  <img 
+                    src={p.sprite} 
+                    alt={p.name} 
+                    className="w-32 h-32 object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] relative z-10 group-hover/sprite:scale-110 transition-transform duration-500" 
+                    style={{ imageRendering: 'pixelated' }}
+                  />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-2 text-xs mb-4">
-                  <div className="bg-slate-900/50 p-2 rounded text-center">
-                    <span className="text-white block">Nature</span>
-                    <span className="text-white font-bold">{p.nature.name}</span>
+                <div className="grid grid-cols-2 gap-3 mb-8">
+                  <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                    <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block mb-1">Naturaleza</span>
+                    <span className="text-xs font-bold text-white uppercase italic">{p.nature.name}</span>
                   </div>
-                  <div className="bg-slate-900/50 p-2 rounded text-center">
-                    <span className="text-white block">Ability</span>
-                    <span className="text-white font-bold truncate block" title={p.ability.name}>{p.ability.name}</span>
+                  <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                    <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block mb-1">Habilidad</span>
+                    <span className="text-xs font-bold text-white uppercase italic truncate block" title={p.ability.name}>{p.ability.name}</span>
                   </div>
                 </div>
                 
                 <button
                   onClick={() => buyPokemon(p)}
                   disabled={coins < getPrice(p)}
-                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full bg-white hover:bg-zinc-200 disabled:opacity-20 disabled:cursor-not-allowed text-black font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 uppercase italic tracking-widest text-sm shadow-xl hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  Buy (💰 {getPrice(p)})
+                  Fichar <span className="text-zinc-500 font-bold ml-1">💰 {getPrice(p).toLocaleString()}</span>
                 </button>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}

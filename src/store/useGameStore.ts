@@ -93,6 +93,9 @@ export const useGameStore = create<DevGameState>()(
         };
       }),
 
+      evolvingPokemon: null,
+      setEvolvingPokemon: (data) => set({ evolvingPokemon: data }),
+
       addCoins: (amount) => set((state) => ({ coins: state.coins + amount })),
       spendCoins: (amount) => {
         const state = get();

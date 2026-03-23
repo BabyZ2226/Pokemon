@@ -119,6 +119,24 @@ export interface Mission {
   requirement: number;
 }
 
+export interface Friend {
+  id: string;
+  name: string;
+  progress: {
+    coins: number;
+    leagueLevel: number;
+    pokedexCount: number;
+  };
+}
+
+export interface FriendRequest {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: any;
+}
+
 export interface GameState {
   // Resources
   coins: number;
@@ -161,4 +179,8 @@ export interface GameState {
   setEnergy: (amount: number) => void;
   updatePokemon: (id: string, updates: Partial<PokemonInstance>) => void;
   updateMissionProgress: (action: string, amount: number) => void;
+  
+  // Animation state
+  evolvingPokemon: { from: PokemonInstance, to: PokemonInstance } | null;
+  setEvolvingPokemon: (data: { from: PokemonInstance, to: PokemonInstance } | null) => void;
 }

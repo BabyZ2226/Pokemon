@@ -1,78 +1,22 @@
 import React, { useState } from 'react';
-import { useGameStore } from '../store/useGameStore';
-import { Package, Zap, Heart, Shield, Sparkles, Droplets, Flame, Leaf, Mountain, Skull, Eye } from 'lucide-react';
-import { canEvolve } from '../utils/evolution';
-import { generatePokemon } from '../utils/pokemonGenerator';
+import { Package } from 'lucide-react';
 
-export const InventoryTab: React.FC = () => {
-  const { inventory, roster, removeItem, loadState } = useGameStore();
+interface InventoryTabProps {
+  inventory: any[];
+  roster: any[];
+  onUseItem: (itemId: string, pokemonId: string) => void;
+}
+
+export const InventoryTab: React.FC<InventoryTabProps> = ({ inventory, roster, onUseItem }) => {
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [selectedPokemon, setSelectedPokemon] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const handleUseItem = async () => {
     if (!selectedItem || !selectedPokemon) return;
-
-    const item = inventory.find(i => i.id === selectedItem);
-    const pokemon = roster.find(p => p.id === selectedPokemon);
-
-    if (!item || !pokemon) return;
-
-    if (item.type === 'stone') {
-      const { canEvolve: evolvePossible, evolutionId } = canEvolve(pokemon, inventory);
-      if (evolvePossible && evolutionId) {
-        // Evolve
-        try {
-          const evolvedPokemon = await generatePokemon(pokemon.rarity, 1); // We just need the base stats, wait we should fetch the specific evolution
-          // Actually, we need a way to fetch a specific pokemon by ID and keep the current stats/level
-          // For now, let's just update the pokedexNumber, name, sprite, types, baseStats
-          const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${evolutionId}`);
-          const data = await response.json();
-          
-          const types = data.types.map((t: any) => (t.type.name.charAt(0).toUpperCase() + t.type.name.slice(1)));
-          const baseStats = {
-            hp: data.stats.find((s: any) => s.stat.name === 'hp').base_stat,
-            atk: data.stats.find((s: any) => s.stat.name === 'attack').base_stat,
-            def: data.stats.find((s: any) => s.stat.name === 'defense').base_stat,
-            spa: data.stats.find((s: any) => s.stat.name === 'special-attack').base_stat,
-            spd: data.stats.find((s: any) => s.stat.name === 'special-defense').base_stat,
-            spe: data.stats.find((s: any) => s.stat.name === 'speed').base_stat,
-          };
-
-          const updatedPokemon = {
-            ...pokemon,
-            pokedexNumber: evolutionId,
-            name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
-            sprite: pokemon.isShiny ? data.sprites.front_shiny : data.sprites.front_default,
-            types,
-            baseStats,
-            currentStats: { ...baseStats }, // Simplified
-          };
-
-          const newRoster = roster.map(p => p.id === pokemon.id ? updatedPokemon : p);
-          removeItem(item.id, 1);
-          loadState({ roster: newRoster });
-          setMessage(`¡${pokemon.name} ha evolucionado a ${updatedPokemon.name}!`);
-        } catch (error) {
-          console.error("Error evolving pokemon", error);
-          setMessage("Hubo un error al evolucionar.");
-        }
-      } else {
-        setMessage("Este objeto no tiene efecto en este Pokémon.");
-      }
-    } else if (item.type === 'mega_stone') {
-      // Equip mega stone
-      const newRoster = roster.map(p => p.id === pokemon.id ? { ...p, heldItem: { id: item.id, name: item.name, description: 'Permite la Mega Evolución', effectType: 'utility' as const, value: 0 } } : p);
-      removeItem(item.id, 1);
-      loadState({ roster: newRoster });
-      setMessage(`¡${pokemon.name} ha equipado ${item.name}!`);
-    } else {
-      setMessage("No puedes usar este objeto así.");
-    }
-
+    onUseItem(selectedItem, selectedPokemon);
     setSelectedItem(null);
     setSelectedPokemon(null);
-    setTimeout(() => setMessage(null), 3000);
   };
 
   return (

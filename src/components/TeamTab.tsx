@@ -61,7 +61,7 @@ export default function TeamTab() {
                     layout
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    key={pokemon.id} 
+                    key={pokemon.instanceId || pokemon.id} 
                     className={`group relative p-5 rounded-[2rem] border transition-all duration-300 cursor-pointer overflow-hidden ${
                       isActive 
                         ? 'bg-indigo-600/10 border-indigo-500/50 shadow-lg shadow-indigo-600/5' 

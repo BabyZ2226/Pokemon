@@ -21,6 +21,7 @@ export default function BattleScreen({ onComplete }: { onComplete: () => void })
   const [eHP, setEHP] = useState(0);
   const [pStatus, setPStatus] = useState<StatusCondition>('None');
   const [eStatus, setEStatus] = useState<StatusCondition>('None');
+  const [battleBackground, setBattleBackground] = useState<string>('https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=1920&q=80');
 
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -40,19 +41,34 @@ export default function BattleScreen({ onComplete }: { onComplete: () => void })
     const weathers: Weather[] = ['Clear', 'Rain', 'Sun', 'Sandstorm', 'Hail'];
     setWeather(weathers[Math.floor(Math.random() * weathers.length)]);
     
-    setPHP(playerTeam[0].baseStats.hp * 3);
-    setEHP(mockEnemies[0].baseStats.hp * 3);
+    if (playerTeam.length > 0) {
+      setPHP(playerTeam[0].baseStats.hp * 3);
+    }
+    if (mockEnemies.length > 0) {
+      setEHP(mockEnemies[0].baseStats.hp * 3);
+    }
+
+    import('../utils/gemini').then(({ generateBattleBackground }) => {
+      generateBattleBackground().then(setBattleBackground);
+    });
   }, []);
 
   useEffect(() => {
     if (enemyTeam.length === 0 || playerTeam.length === 0 || isFinished) return;
 
     const interval = setInterval(() => {
+      if (pIndex >= playerTeam.length || eIndex >= enemyTeam.length) {
+        clearInterval(interval);
+        return;
+      }
+
       let currentLog = [...log];
       
       const p = { ...playerTeam[pIndex], status: pStatus };
       const e = { ...enemyTeam[eIndex], status: eStatus };
 
+      if (!p || !e || !p.moves || !e.moves) return;
+      
       const pMove = p.moves[Math.floor(Math.random() * p.moves.length)] || { name: 'Struggle', power: 50, type: 'normal', category: 'Physical' };
       const eMove = e.moves[Math.floor(Math.random() * e.moves.length)] || { name: 'Struggle', power: 50, type: 'normal', category: 'Physical' };
 
@@ -122,30 +138,82 @@ export default function BattleScreen({ onComplete }: { onComplete: () => void })
         <div className="text-sm font-bold text-zinc-400">{weather}</div>
       </div>
 
-      <div className="flex-1 p-4 md:p-8 flex flex-col gap-6">
+      <div className="flex-1 p-4 md:p-8 flex flex-col gap-6 relative overflow-hidden">
+        {/* Battle Background */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ 
+            backgroundImage: `url('${battleBackground}')`,
+          }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60" />
+        </div>
+
         {/* Battle Arena */}
-        <div className="flex justify-between items-center gap-4">
-          {/* Player */}
-          <div className="flex flex-col items-center gap-2">
-            <motion.img src={playerTeam[pIndex]?.sprite} alt="Player" className="w-24 h-24 md:w-32 md:h-32 object-contain" animate={{ scale: [1, 1.1, 1] }} />
-            <div className="w-32 bg-zinc-700 h-3 rounded-full overflow-hidden">
-              <motion.div className="h-full bg-emerald-500" animate={{ width: `${(pHP / (playerTeam[pIndex]?.baseStats.hp * 3)) * 100}%` }} />
+        <div className="flex-1 relative z-10 flex flex-col justify-center">
+          <div className="flex justify-between items-center gap-4 relative h-64">
+            {/* Player */}
+            <div className="absolute left-[5%] bottom-[10%] flex flex-col items-center">
+              {/* Battle Base Platform */}
+              <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-32 md:w-56 h-8 md:h-14 bg-gradient-to-b from-emerald-400/40 to-emerald-900/60 rounded-[100%] border-b-4 border-emerald-950/40 shadow-[0_10px_30px_rgba(0,0,0,0.4)]" />
+              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-24 md:w-44 h-6 md:h-10 bg-emerald-500/20 rounded-[100%] border border-white/10" />
+              
+              <motion.img 
+                src={playerTeam[pIndex]?.sprite} 
+                alt="Player" 
+                className="w-24 h-24 md:w-32 md:h-32 object-contain relative z-10" 
+                animate={{ y: [0, -5, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <div className="mt-8 bg-black/60 backdrop-blur-md p-2 rounded-xl border border-white/10 w-32">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-black text-white uppercase truncate">{playerTeam[pIndex]?.name}</span>
+                  <span className="text-[8px] font-bold text-zinc-400">Lv{playerTeam[pIndex]?.level}</span>
+                </div>
+                <div className="w-full bg-zinc-700 h-1.5 rounded-full overflow-hidden">
+                  <motion.div 
+                    className="h-full bg-emerald-500" 
+                    animate={{ width: `${(pHP / (playerTeam[pIndex]?.baseStats.hp * 3)) * 100}%` }} 
+                  />
+                </div>
+              </div>
             </div>
-            <span className="text-xs font-bold text-white">{playerTeam[pIndex]?.name}</span>
-          </div>
-          <Swords className="text-zinc-600" size={32} />
-          {/* Enemy */}
-          <div className="flex flex-col items-center gap-2">
-            <motion.img src={enemyTeam[eIndex]?.sprite} alt="Enemy" className="w-24 h-24 md:w-32 md:h-32 object-contain" animate={{ scale: [1, 1.1, 1] }} />
-            <div className="w-32 bg-zinc-700 h-3 rounded-full overflow-hidden">
-              <motion.div className="h-full bg-rose-500" animate={{ width: `${(eHP / (enemyTeam[eIndex]?.baseStats.hp * 3)) * 100}%` }} />
+
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+              <Swords className="text-white/20" size={48} />
             </div>
-            <span className="text-xs font-bold text-white">{enemyTeam[eIndex]?.name}</span>
+
+            {/* Enemy */}
+            <div className="absolute right-[5%] top-[5%] flex flex-col items-center">
+              {/* Battle Base Platform */}
+              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-24 md:w-44 h-6 md:h-10 bg-gradient-to-b from-emerald-400/40 to-emerald-900/60 rounded-[100%] border-b-2 border-emerald-950/40 shadow-[0_5px_15px_rgba(0,0,0,0.4)]" />
+              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-20 md:w-36 h-4 md:h-8 bg-emerald-500/20 rounded-[100%] border border-white/10" />
+
+              <motion.img 
+                src={enemyTeam[eIndex]?.sprite} 
+                alt="Enemy" 
+                className="w-20 h-20 md:w-28 md:h-28 object-contain relative z-10" 
+                animate={{ y: [0, -3, 0] }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <div className="mt-6 bg-black/60 backdrop-blur-md p-2 rounded-xl border border-white/10 w-32">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-black text-white uppercase truncate">{enemyTeam[eIndex]?.name}</span>
+                  <span className="text-[8px] font-bold text-zinc-400">Lv{enemyTeam[eIndex]?.level}</span>
+                </div>
+                <div className="w-full bg-zinc-700 h-1.5 rounded-full overflow-hidden">
+                  <motion.div 
+                    className="h-full bg-rose-500" 
+                    animate={{ width: `${(eHP / (enemyTeam[eIndex]?.baseStats.hp * 3)) * 100}%` }} 
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Log */}
-        <div className="flex-1 overflow-y-auto p-4 bg-black/20 rounded-2xl font-mono text-xs custom-scrollbar">
+        <div className="h-32 overflow-y-auto p-4 bg-black/40 backdrop-blur-md rounded-2xl font-mono text-[10px] md:text-xs custom-scrollbar border border-white/5 relative z-10">
           {log.map((entry, i) => <div key={i} className="text-zinc-300 mb-1">{entry}</div>)}
           <div ref={logEndRef} />
         </div>

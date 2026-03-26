@@ -58,18 +58,21 @@ const NATURE_EFFECTS: Record<string, { inc: string, dec: string }> = {
 };
 
 export function calculateActualStat(pokemon: PokemonInstance, statName: StatName): number {
-  const base = pokemon.baseStats[statName];
-  const iv = pokemon.ivs[statName];
-  const ev = pokemon.evs[statName];
+  if (!pokemon || !pokemon.baseStats) return 100;
+  
+  const base = pokemon.baseStats[statName] || 50;
+  const iv = (pokemon.ivs && pokemon.ivs[statName]) !== undefined ? pokemon.ivs[statName] : 15;
+  const ev = (pokemon.evs && pokemon.evs[statName]) !== undefined ? pokemon.evs[statName] : 0;
+  const level = pokemon.level || 50;
   
   // Formula for HP is different
   if (statName === 'hp') {
-    return Math.floor((((2 * base + iv + Math.floor(ev / 4)) * pokemon.level) / 100) + pokemon.level + 10);
+    return Math.floor((((2 * base + iv + Math.floor(ev / 4)) * level) / 100) + level + 10);
   }
 
-  let statValue = Math.floor((((2 * base + iv + Math.floor(ev / 4)) * pokemon.level) / 100) + 5);
+  let statValue = Math.floor((((2 * base + iv + Math.floor(ev / 4)) * level) / 100) + 5);
   
-  const natureEffect = NATURE_EFFECTS[pokemon.nature as string];
+  const natureEffect = pokemon.nature ? NATURE_EFFECTS[pokemon.nature as string] : null;
   if (natureEffect) {
     if (natureEffect.inc === statName) statValue = Math.floor(statValue * 1.1);
     if (natureEffect.dec === statName) statValue = Math.floor(statValue * 0.9);

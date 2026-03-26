@@ -56,6 +56,7 @@ export interface Move {
 
 export interface PokemonInstance {
   id: string;
+  instanceId?: string;
   pokedexNumber: number;
   name: string;
   sprite: string;
@@ -137,6 +138,28 @@ export interface FriendRequest {
   createdAt: any;
 }
 
+export interface MultiplayerPlayer {
+  id: string;
+  uid: string;
+  name: string;
+  team: PokemonInstance[];
+  activeIdx: number;
+  hp: number[];
+}
+
+export interface MultiplayerRoom {
+  id?: string;
+  status: 'waiting' | 'playing' | 'finished';
+  player1: MultiplayerPlayer;
+  player2: MultiplayerPlayer | null;
+  currentTurnId: string;
+  logs: string[];
+  winnerId: string | null;
+  updatedAt: number;
+  isPrivate?: boolean;
+  targetPlayerId?: string;
+}
+
 export interface GameState {
   // Resources
   coins: number;
@@ -153,6 +176,8 @@ export interface GameState {
   // Progress
   badges: string[]; // Badge IDs
   missions: Mission[];
+  leagueLevel: number;
+  pokedex: number[]; // Array of pokedex numbers collected
 
   // Management
   facilities: Facilities;
@@ -180,6 +205,21 @@ export interface GameState {
   updatePokemon: (id: string, updates: Partial<PokemonInstance>) => void;
   updateMissionProgress: (action: string, amount: number) => void;
   
+  // Multiplayer
+  userId: string;
+  uid: string;
+  userName: string;
+  setUserId: (id: string) => void;
+  setUid: (uid: string) => void;
+  setUserName: (name: string) => void;
+  currentRoom: MultiplayerRoom | null;
+  unsubscribeRoom: (() => void) | null;
+  subscribeToRoom: (roomId: string, userId: string) => void;
+  leaveRoom: () => void;
+  submitMultiplayerMove: (move: Move) => Promise<void>;
+  switchMultiplayerPokemon: (newIdx: number) => Promise<void>;
+  useMultiplayerItem: (itemId: string, targetIdx: number) => Promise<void>;
+
   // Animation state
   evolvingPokemon: { from: PokemonInstance, to: PokemonInstance } | null;
   setEvolvingPokemon: (data: { from: PokemonInstance, to: PokemonInstance } | null) => void;

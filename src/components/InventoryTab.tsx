@@ -58,7 +58,18 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ inventory, roster, o
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <span className="font-bold text-white">{item.name}</span>
+                    <div className="flex items-center gap-2">
+                      <img 
+                        src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${item.type === 'stone' ? `${item.id}-stone` : item.id}.png`} 
+                        alt={item.name} 
+                        className="w-8 h-8 object-contain" 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/32';
+                        }}
+                      />
+                      <span className="font-bold text-white">{item.name}</span>
+                    </div>
                     <span className="text-xs font-black text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-lg">x{item.quantity}</span>
                   </div>
                   <p className="text-xs text-zinc-400 capitalize">{item.type.replace('_', ' ')}</p>
@@ -74,7 +85,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ inventory, roster, o
             <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
               {roster.map(pokemon => (
                 <button
-                  key={pokemon.id}
+                  key={pokemon.instanceId || pokemon.id}
                   onClick={() => setSelectedPokemon(pokemon.id)}
                   className={`p-3 rounded-xl border flex items-center gap-3 transition-all ${
                     selectedPokemon === pokemon.id 

@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { GameState, PokemonInstance, Facilities, Staff } from '../types';
+import { GameState, PokemonInstance, Facilities, Staff, MultiplayerRoom } from '../types';
+import { doc, onSnapshot, updateDoc, getFirestore } from 'firebase/firestore';
+import { calculateDamage, calculateActualStat } from '../utils/battleLogic';
+import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 
 const INITIAL_FACILITIES: Facilities = {
   stadiumLevel: 1,
@@ -45,6 +48,175 @@ export const useGameStore = create<DevGameState>()(
       roster: [],
       activeTeamIds: [],
 
+      userId: Math.random().toString(36).substring(2, 15),
+      uid: '',
+      userName: 'Entrenador ' + Math.floor(Math.random() * 1000),
+      setUserId: (id) => set({ userId: id }),
+      setUid: (uid) => set({ uid: uid }),
+      setUserName: (name) => set({ userName: name }),
+      currentRoom: null,
+      unsubscribeRoom: null,
+
+      subscribeToRoom: (roomId, userId) => {
+        const unsub = onSnapshot(doc(getFirestore(), 'rooms', roomId), (docSnap) => {
+          if (docSnap.exists()) {
+            set({ currentRoom: { id: docSnap.id, ...docSnap.data() } as MultiplayerRoom });
+          }
+        }, (error) => {
+          handleFirestoreError(error, OperationType.GET, `rooms/${roomId}`);
+        });
+        set({ unsubscribeRoom: unsub });
+      },
+
+      leaveRoom: () => {
+        const state = get();
+        if (state.unsubscribeRoom) state.unsubscribeRoom();
+        set({ currentRoom: null, unsubscribeRoom: null });
+      },
+
+      submitMultiplayerMove: async (move) => {
+        const state = get();
+        const room = state.currentRoom;
+        if (!room || room.status !== 'playing' || room.currentTurnId !== state.userId) return;
+
+        const isPlayer1 = room.player1.id === state.userId;
+        const me = isPlayer1 ? room.player1 : room.player2!;
+        const opponent = isPlayer1 ? room.player2! : room.player1;
+
+        const myActive = me.team[me.activeIdx];
+        const oppActive = opponent.team[opponent.activeIdx];
+
+        const result = calculateDamage({
+          attacker: myActive,
+          defender: oppActive,
+          move,
+          weather: 'Clear',
+          isCritical: Math.random() < 0.05
+        });
+
+        const newOppHp = [...opponent.hp];
+        newOppHp[opponent.activeIdx] = Math.max(0, newOppHp[opponent.activeIdx] - result.damage);
+
+        const logs = [...room.logs];
+        if (newOppHp[opponent.activeIdx] > 0) {
+          logs.push(`${me.name}: ¡${myActive.name}, usa ${move.name}!`);
+          logs.push(`¡Causó ${result.damage} de daño a ${oppActive.name}!`);
+        }
+        
+        let winnerId: string | null = null;
+        let status: 'waiting' | 'playing' | 'finished' = room.status;
+        let nextTurnId = opponent.id;
+        let newOppActiveIdx = opponent.activeIdx;
+
+        if (newOppHp[opponent.activeIdx] <= 0) {
+          logs.push(`${me.name}: ¡${myActive.name}, usa ${move.name}!`);
+          logs.push(`¡Causó ${result.damage} de daño a ${oppActive.name}!`);
+          logs.push(`¡${oppActive.name} se ha debilitado!`);
+          
+          const nextAliveIdx = newOppHp.findIndex(hp => hp > 0);
+          if (nextAliveIdx === -1) {
+            winnerId = me.id;
+            status = 'finished';
+            logs.push(`¡${me.name} ha ganado el combate!`);
+          } else {
+            logs.push(`¡${opponent.name} debe elegir otro Pokémon!`);
+          }
+        }
+
+        const updates: Partial<MultiplayerRoom> = {
+          logs,
+          currentTurnId: nextTurnId,
+          status,
+          winnerId,
+          updatedAt: Date.now()
+        };
+
+        if (isPlayer1) {
+          updates.player2 = { ...opponent, hp: newOppHp, activeIdx: newOppActiveIdx };
+        } else {
+          updates.player1 = { ...opponent, hp: newOppHp, activeIdx: newOppActiveIdx };
+        }
+
+        try {
+          await updateDoc(doc(getFirestore(), 'rooms', room.id!), updates);
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, `rooms/${room.id}`);
+        }
+      },
+
+      switchMultiplayerPokemon: async (newIdx) => {
+        const state = get();
+        const room = state.currentRoom;
+        if (!room || room.status !== 'playing' || room.currentTurnId !== state.userId) return;
+
+        const isPlayer1 = room.player1.id === state.userId;
+        const me = isPlayer1 ? room.player1 : room.player2!;
+        const opponent = isPlayer1 ? room.player2! : room.player1;
+
+        if (me.hp[newIdx] <= 0) return;
+
+        const logs = [...room.logs, `${me.name} retira a ${me.team[me.activeIdx].name}...`, `¡Adelante ${me.team[newIdx].name}!`];
+        
+        const updates: Partial<MultiplayerRoom> = {
+          logs,
+          currentTurnId: opponent.id,
+          updatedAt: Date.now()
+        };
+
+        if (isPlayer1) {
+          updates.player1 = { ...me, activeIdx: newIdx };
+        } else {
+          updates.player2 = { ...me, activeIdx: newIdx };
+        }
+
+        try {
+          await updateDoc(doc(getFirestore(), 'rooms', room.id!), updates);
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, `rooms/${room.id}`);
+        }
+      },
+
+      useMultiplayerItem: async (itemId, targetIdx) => {
+        const state = get();
+        const room = state.currentRoom;
+        if (!room || room.status !== 'playing' || room.currentTurnId !== state.userId) return;
+
+        const isPlayer1 = room.player1.id === state.userId;
+        const me = isPlayer1 ? room.player1 : room.player2!;
+        const opponent = isPlayer1 ? room.player2! : room.player1;
+
+        const item = state.inventory.find(i => i.id === itemId);
+        if (!item || item.quantity <= 0) return;
+
+        // Simple healing logic for now
+        const healAmount = 100; // Increased heal amount for better balance
+        const targetPokemon = me.team[targetIdx];
+        const maxHp = calculateActualStat(targetPokemon, 'hp');
+        const newHp = [...me.hp];
+        newHp[targetIdx] = Math.min(maxHp, newHp[targetIdx] + healAmount);
+
+        const logs = [...room.logs, `${me.name} usa ${item.name} en ${me.team[targetIdx].name}.`];
+        
+        const updates: Partial<MultiplayerRoom> = {
+          logs,
+          currentTurnId: opponent.id,
+          updatedAt: Date.now()
+        };
+
+        if (isPlayer1) {
+          updates.player1 = { ...me, hp: newHp };
+        } else {
+          updates.player2 = { ...me, hp: newHp };
+        }
+
+        try {
+          await updateDoc(doc(getFirestore(), 'rooms', room.id!), updates);
+          state.removeItem(itemId, 1);
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, `rooms/${room.id}`);
+        }
+      },
+
       facilities: INITIAL_FACILITIES,
       staff: INITIAL_STAFF,
 
@@ -56,6 +228,8 @@ export const useGameStore = create<DevGameState>()(
         { id: '1', title: 'Win 5 matches', description: 'Win 5 matches in the league', reward: 1000, completed: false, progress: 0, requirement: 5 },
         { id: '2', title: 'Collect 10 Pokémon', description: 'Collect 10 Pokémon in your roster', reward: 2000, completed: false, progress: 0, requirement: 10 },
       ],
+      leagueLevel: 1,
+      pokedex: [],
 
       loadState: (newState) => set((state) => ({ ...state, ...newState })),
 

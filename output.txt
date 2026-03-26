@@ -1,0 +1,94 @@
+6:import React, { useState, useEffect, useMemo, useRef } from 'react';
+23792:  const [user, setUser] = useState<User | null>(null);
+23793:  const [isAuthReady, setIsAuthReady] = useState(false);
+23794:  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+23796:  const [activeTab, setActiveTab] = useState<'team' | 'shop' | 'battles' | 'pokedex' | 'lab' | 'market' | 'settings' | 'hallOfFame' | 'missions' | 'event' | 'facilities' | 'staff' | 'league' | 'inventory' | 'explore' | 'multiplayer' | 'friends'>('team');
+23797:  const [gameState, setGameState] = useState<'management' | 'battle'>('management');
+23798:  const [selectedLabPokemonId, setSelectedLabPokemonId] = useState<string | null>(null);
+23799:  const [showBatchTraining, setShowBatchTraining] = useState(false);
+23800:  const [batchSelectedPokemon, setBatchSelectedPokemon] = useState<string[]>([]);
+23801:  const [batchTargetLevel, setBatchTargetLevel] = useState<number>(10);
+23802:  const [showLoginPrompt, setShowLoginPrompt] = useState(() => {
+23812:  const [showStarterSelect, setShowStarterSelect] = useState(() => {
+23822:  const [isSelectingStarter, setIsSelectingStarter] = useState(false);
+23823:  const [starterIndex, setStarterIndex] = useState(0);
+23824:  const [showResetConfirm, setShowResetConfirm] = useState(false);
+23828:  const [tutorialStep, setTutorialStep] = useState(0);
+23829:  const [isTutorialActive, setIsTutorialActive] = useState(false);
+23830:  const [tutorialCompleted, setTutorialCompleted] = useState(() => localStorage.getItem('plm_tutorial_completed') === 'true');
+23833:  const [coins, setCoins] = useState(() => Number(localStorage.getItem('plm_coins')) || 2000);
+23834:  const [stardust, setStardust] = useState(() => Number(localStorage.getItem('plm_stardust')) || 500);
+23835:  const [energy, setEnergy] = useState(() => Number(localStorage.getItem('plm_energy')) || 100);
+23836:  const [tp, setTp] = useState(() => Number(localStorage.getItem('plm_tp')) || 200);
+23837:  const [selectedExplorePokemonId, setSelectedExplorePokemonId] = useState<string | null>(null);
+23838:  const [isExploring, setIsExploring] = useState(false);
+23839:  const [exploreResult, setExploreResult] = useState<{ type: 'item' | 'coins' | 'happiness' | 'nothing', value: any, pokemonName?: string } | null>(null);
+23840:  const [banditas, setBanditas] = useState(() => Number(localStorage.getItem('plm_banditas')) || 2);
+23841:  const [evolutionStones, setEvolutionStones] = useState<Record<string, number>>(() => {
+23846:  const [heldItems, setHeldItems] = useState<Record<string, number>>(() => {
+23851:  const [megaStones, setMegaStones] = useState<string[]>(() => {
+23856:  const [teamName, setTeamName] = useState(() => localStorage.getItem('plm_teamName') || 'Mis Pokémon');
+23857:  const [teamLogo, setTeamLogo] = useState(() => localStorage.getItem('plm_teamLogo') || '🛡️');
+23858:  const [totalMatches, setTotalMatches] = useState(() => Number(localStorage.getItem('plm_totalMatches')) || 0);
+23859:  const [collection, setCollection] = useState<PokemonCard[]>(() => {
+23867:  const [team, setTeam] = useState<string[]>(() => {
+23875:  const [history, setHistory] = useState<string[]>(() => {
+23883:  const [badges, setBadges] = useState<string[]>(() => {
+23891:  const [defeatedGyms, setDefeatedGyms] = useState<string[]>(() => {
+23899:  const [isLeagueQualified, setIsLeagueQualified] = useState(() => localStorage.getItem('plm_isLeagueQualified') === 'true');
+23900:  const [leagueLevel, setLeagueLevel] = useState(() => Number(localStorage.getItem('plm_leagueLevel')) || 1);
+23901:  const [pokedex, setPokedex] = useState<number[]>(() => {
+23909:  const [selectedPokemon, setSelectedPokemon] = useState<PokemonCard | null>(null);
+23910:  const [selectedPokedexPokemon, setSelectedPokedexPokemon] = useState<PokemonBase | null>(null);
+23911:  const [showItemSelection, setShowItemSelection] = useState<string | null>(null);
+23912:  const [matchPreview, setMatchPreview] = useState<string | null>(null);
+23913:  const [previewRivalTeam, setPreviewRivalTeam] = useState<{p: PokemonCard, hp: number, maxHp: number}[] | null>(null);
+23914:  const [previewRivalInfo, setPreviewRivalInfo] = useState<any>(null);
+23915:  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+23916:  const [pokedexDescription, setPokedexDescription] = useState<string>('');
+23917:  const [pokedexStats, setPokedexStats] = useState<{hp: number, atk: number, def: number, spe: number} | null>(null);
+23918:  const [isFetchingPokedexData, setIsFetchingPokedexData] = useState(false);
+23919:  const [showRankGuide, setShowRankGuide] = useState(false);
+23920:  const [showChampionCelebration, setShowChampionCelebration] = useState(false);
+23993:  const [isTournamentMode, setIsTournamentMode] = useState(() => localStorage.getItem('plm_isTournamentMode') === 'true');
+23994:  const [tournamentPlayedThisSeason, setTournamentPlayedThisSeason] = useState(() => localStorage.getItem('plm_tournamentPlayedThisSeason') === 'true');
+23995:  const [isChampionshipTournament, setIsChampionshipTournament] = useState(() => localStorage.getItem('plm_isChampionshipTournament') === 'true');
+23996:  const [tournamentRule, setTournamentRule] = useState<string | null>(() => localStorage.getItem('plm_tournamentRule') || null);
+23997:  const [tournamentBracket, setTournamentBracket] = useState<{
+24020:  const [leagueTeams, setLeagueTeams] = useState<LeagueTeam[]>(() => {
+24028:  const [schedule, setSchedule] = useState<Match[]>(() => {
+24036:  const [currentWeek, setCurrentWeek] = useState(() => Number(localStorage.getItem('plm_currentWeek')) || 1);
+24037:  const [season, setSeason] = useState(() => Number(localStorage.getItem('plm_season')) || 1);
+24038:  const [arenaBg, setArenaBg] = useState('bg-zinc-950');
+24039:  const [isSimulating, setIsSimulating] = useState(false);
+24040:  const [simulationState, setSimulationState] = useState<{
+24057:  const [activeSponsor, setActiveSponsor] = useState<Sponsor | null>(() => {
+24065:  const [items, setItems] = useState<Item[]>(() => {
+24073:  const [marketOffers, setMarketOffers] = useState<MarketOffer[]>(() => {
+24081:  const [learnableMoves, setLearnableMoves] = useState<Move[]>([]);
+24082:  const [isLoadingMoves, setIsLoadingMoves] = useState(false);
+24083:  const [moveSlotToReplace, setMoveSlotToReplace] = useState<number | null>(null);
+24084:  const [confirmMove, setConfirmMove] = useState<{ instanceId: string, slotIndex: number, move: Move } | null>(null);
+24085:  const [hallOfFame, setHallOfFame] = useState<PokemonCard[]>(() => {
+24093:  const [nursery, setNursery] = useState<{ parents: PokemonCard[], eggProgress: number } | null>(() => {
+24107:  const [globalBattleSpeed, setGlobalBattleSpeed] = useState(() => Number(localStorage.getItem('plm_globalBattleSpeed')) || 1);
+24108:  const [evolvingPokemon, setEvolvingPokemon] = useState<{ from: PokemonCard, to: PokemonCard } | null>(null);
+24109:  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+24112:  const [theme, setTheme] = useState(() => localStorage.getItem('plm_theme') || 'zinc');
+24113:  const [audioEnabled, setAudioEnabled] = useState(() => localStorage.getItem('plm_audioEnabled') !== 'false');
+24114:  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('plm_notificationsEnabled') !== 'false');
+24121:  const [isBulkTrainingMode, setIsBulkTrainingMode] = useState(false);
+24122:  const [selectedForBulkTrain, setSelectedForBulkTrain] = useState<string[]>([]);
+24123:  const [bulkTrainTargetLevel, setBulkTrainTargetLevel] = useState(20);
+24140:  const [activeEvent, setActiveEvent] = useState<GameEvent | null>(() => {
+24148:  const [facilities, setFacilities] = useState<Facility[]>(() => {
+24156:  const [staff, setStaff] = useState<StaffMember[]>(() => {
+24164:  const [weather, setWeather] = useState<string>('clear');
+24165:  const [missions, setMissions] = useState<Mission[]>(() => {
+24173:  const [lastMissionReset, setLastMissionReset] = useState(() => Number(localStorage.getItem('plm_lastMissionReset')) || 0);
+24174:  const [celebration, setCelebration] = useState<{type: 'win' | 'mission', message: string} | null>(null);
+24636:  const [battleData, setBattleData] = useState<{
+24946:  const [openingPack, setOpeningPack] = useState<{ pack: any, pokemon: PokemonCard | null, isRevealed: boolean } | null>(null);
+24947:  const [openingStage, setOpeningStage] = useState<'idle' | 'shaking' | 'bursting' | 'revealed'>('idle');
+25518:  const [isGeneratingBattle, setIsGeneratingBattle] = useState(false);
+25519:  const [pendingEvolution, setPendingEvolution] = useState<{ pokemon: PokemonCard, options: { id: number, condition: any }[] } | null>(null);

@@ -1,29 +1,72 @@
 {
   "entities": {
+    "PokemonInstance": {
+      "title": "PokemonInstance",
+      "description": "A Pokemon instance in a player's team.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "pokemonId": { "type": "string" },
+        "name": { "type": "string" },
+        "level": { "type": "number" },
+        "types": { "type": "array", "items": { "type": "string" } },
+        "baseStats": {
+          "type": "object",
+          "properties": {
+            "hp": { "type": "number" },
+            "attack": { "type": "number" },
+            "defense": { "type": "number" },
+            "specialAttack": { "type": "number" },
+            "specialDefense": { "type": "number" },
+            "speed": { "type": "number" }
+          }
+        },
+        "moves": { "type": "array", "items": { "type": "object" } },
+        "sprite": { "type": "string" }
+      }
+    },
+    "MultiplayerPlayer": {
+      "title": "MultiplayerPlayer",
+      "description": "A player in a multiplayer room.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "team": { "type": "array", "items": { "$ref": "PokemonInstance" } },
+        "activeIdx": { "type": "number" },
+        "hp": { "type": "array", "items": { "type": "number" } }
+      },
+      "required": ["id", "name", "team", "activeIdx", "hp"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "A multiplayer game room.",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["waiting", "playing", "finished"] },
+        "player1": { "$ref": "MultiplayerPlayer" },
+        "player2": { "$ref": "MultiplayerPlayer" },
+        "currentTurnId": { "type": "string" },
+        "logs": { "type": "array", "items": { "type": "string" } },
+        "winnerId": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["status", "player1", "currentTurnId", "logs", "updatedAt"]
+    },
     "User": {
       "title": "User",
-      "description": "User profile and progress",
+      "description": "A user profile.",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
-        "email": { "type": "string" },
-        "progress": { "$ref": "UserProgress" }
+        "photoURL": { "type": "string" },
+        "updatedAt": { "type": "number" }
       },
-      "required": ["name", "email", "progress"]
-    },
-    "UserProgress": {
-      "title": "UserProgress",
-      "description": "User game progress",
-      "type": "object",
-      "properties": {
-        "coins": { "type": "number" },
-        "badges": { "type": "array", "items": { "type": "string" } },
-        "activeTeam": { "type": "array", "items": { "$ref": "PokemonInstance" } }
-      }
+      "required": ["name"]
     },
     "FriendRequest": {
       "title": "FriendRequest",
-      "description": "Friend request between users",
+      "description": "A request to be friends.",
       "type": "object",
       "properties": {
         "senderId": { "type": "string" },
@@ -32,20 +75,20 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["senderId", "receiverId", "status", "createdAt"]
-    },
+    }
   },
   "firestore": {
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "Room" },
+      "description": "Multiplayer game rooms."
+    },
     "/users/{userId}": {
       "schema": { "$ref": "User" },
-      "description": "User data"
-    },
-    "/users/{userId}/friends/{friendId}": {
-      "schema": { "$ref": "User" },
-      "description": "User friends"
+      "description": "User profiles."
     },
     "/friendRequests/{requestId}": {
       "schema": { "$ref": "FriendRequest" },
-      "description": "Friend requests"
+      "description": "Friend requests."
     }
   }
 }

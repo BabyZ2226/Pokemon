@@ -91,7 +91,7 @@ export default function MarketTab() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
             {marketListings.map((p, idx) => (
               <motion.div 
-                key={p.id}
+                key={p.instanceId || p.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}

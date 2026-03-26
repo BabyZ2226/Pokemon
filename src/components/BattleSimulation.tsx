@@ -60,7 +60,7 @@ export default function BattleSimulation({ playerTeam }: { playerTeam: PokemonIn
                 className="w-full bg-black/40 border border-white/10 rounded-2xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all"
               >
                 {playerTeam.map((p, i) => (
-                  <option key={p.id} value={i}>{p.name} (Nv. {p.level})</option>
+                  <option key={p.id + '-atk-' + i} value={i}>{p.name} (Nv. {p.level})</option>
                 ))}
               </select>
             </div>
@@ -73,7 +73,7 @@ export default function BattleSimulation({ playerTeam }: { playerTeam: PokemonIn
                 className="w-full bg-black/40 border border-white/10 rounded-2xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all"
               >
                 {playerTeam.map((p, i) => (
-                  <option key={p.id} value={i}>{p.name} (Nv. {p.level})</option>
+                  <option key={p.id + '-def-' + i} value={i}>{p.name} (Nv. {p.level})</option>
                 ))}
               </select>
             </div>

@@ -1,0 +1,14 @@
+115:  rarity: Rarity;
+221:  rarity: Rarity;
+15589:  { id: 'leftovers', name: 'Restos', description: 'Recupera un poco de HP cada turno.', effect: { hp: 10 }, rarity: 'Raro' },
+15590:  { id: 'choice_band', name: 'Cinta Elegida', description: 'Aumenta mucho el Ataque.', effect: { atk: 20 }, rarity: 'Singular (Mítico)' },
+15591:  { id: 'choice_specs', name: 'Gafas Especiales', description: 'Aumenta mucho el Ataque (Especial).', effect: { atk: 20 }, rarity: 'Singular (Mítico)' },
+15592:  { id: 'choice_scarf', name: 'Pañuelo Elegido', description: 'Aumenta mucho la Velocidad.', effect: { spe: 20 }, rarity: 'Singular (Mítico)' },
+15593:  { id: 'focus_band', name: 'Cinta Focus', description: 'Aumenta la Defensa.', effect: { def: 15 }, rarity: 'Raro' },
+15594:  { id: 'lucky_egg', name: 'Huevo Suerte', description: 'Aumenta la ganancia de TP.', effect: {}, rarity: 'Legendario' },
+15925:const generatePokemon = async (base: PokemonBase, rarity: Rarity, targetLevel: number = 1, shinyMultiplier: number = 1, academyLevel: number = 1): Promise<PokemonCard> => {
+16403:const migrateRarity = (rarity: string): Rarity => {
+16419:    rarity: p.rarity ? migrateRarity(p.rarity) : 'Común'
+17144:          let rarity: Rarity;
+17571:    let rarity: Rarity = 'Común';
+18739:          let rarity: Rarity = 'Común';

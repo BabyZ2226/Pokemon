@@ -1,21 +1,149 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: saves
+    // Document ID: {userId}
+    // Fields:
+    //   - gameState: map (contains the user's single-player save data)
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - name: string
+    //   - photoURL: string
+    //   - progress: map
+    //
+    // Collection: friendRequests
+    // Document ID: auto-generated
+    // Fields:
+    //   - senderId: string
+    //   - receiverId: string
+    //   - status: string ('pending', 'accepted', 'declined')
+    //   - createdAt: timestamp
+    //
+    // Collection: rooms
+    // Document ID: auto-generated
+    // ... (rest of the model)
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
     function isAuthenticated() {
       return request.auth != null;
     }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isValidUser(data) {
+      return data.keys().hasAll(['name'])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() < 100;
+    }
+
+    function isValidFriendRequest(data) {
+      return data.keys().hasAll(['senderId', 'receiverId', 'status', 'createdAt'])
+        && data.senderId is string
+        && data.receiverId is string
+        && data.status in ['pending', 'accepted', 'declined']
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPlayer(player) {
+      return player is map 
+        && player.keys().hasAll(['id', 'uid', 'name', 'team', 'activeIdx', 'hp'])
+        && player.id is string
+        && player.uid is string
+        && player.name is string
+        && player.team is list
+        && player.team.size() > 0
+        && player.team.size() <= 6
+        && player.activeIdx is number
+        && player.hp is list;
+    }
+
+    function isValidRoom(data) {
+      let baseFields = ['status', 'player1', 'player2', 'currentTurnId', 'logs', 'winnerId', 'updatedAt'];
+      return data.keys().hasAll(baseFields)
+        && data.status in ['waiting', 'playing', 'finished']
+        && isValidPlayer(data.player1)
+        && (data.player2 == null || isValidPlayer(data.player2))
+        && data.currentTurnId is string
+        && data.logs is list
+        && (data.winnerId == null || data.winnerId is string)
+        && data.updatedAt is number
+        && (!('isPrivate' in data) || data.isPrivate is bool)
+        && (!('targetPlayerId' in data) || data.targetPlayerId is string);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /saves/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidUser(request.resource.data);
 
       match /friends/{friendId} {
-        allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
+        allow read, write: if isOwner(userId);
       }
+    }
+
+    match /friendRequests/{requestId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.receiverId);
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.senderId && isValidFriendRequest(request.resource.data);
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.receiverId && isValidFriendRequest(request.resource.data);
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.receiverId);
+    }
+
+    match /rooms/{roomId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated() 
+        && isValidRoom(request.resource.data)
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.player1.uid == request.auth.uid
+        && request.resource.data.player2 == null;
+
+      allow update: if isAuthenticated() 
+        && isValidRoom(request.resource.data)
+        && (
+          // 1. Joining a room
+          (resource.data.status == 'waiting' 
+           && request.resource.data.status == 'playing'
+           && request.resource.data.player2 != null
+           && (
+             // Public room
+             (!('isPrivate' in resource.data) || resource.data.isPrivate == false)
+             ||
+             // Private room - must be the target
+             (resource.data.isPrivate == true && resource.data.targetPlayerId == request.auth.uid)
+           )
+           && request.resource.data.player2.uid == request.auth.uid
+           && request.resource.data.player1 == resource.data.player1)
+          ||
+          // 2. Playing the game
+          (resource.data.status == 'playing'
+           && (request.auth.uid == resource.data.player1.uid || request.auth.uid == resource.data.player2.uid)
+           && request.resource.data.player1.uid == resource.data.player1.uid
+           && request.resource.data.player2.uid == resource.data.player2.uid)
+        );
+
+      allow delete: if isAuthenticated() 
+        && resource.data.status == 'waiting' 
+        && resource.data.player1.uid == request.auth.uid;
     }
   }
 }

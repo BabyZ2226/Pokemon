@@ -54,20 +54,26 @@ import {
   Bell,
   Monitor,
   Cloud,
-  LogIn
+  LogIn,
+  Swords,
+  UserPlus
 } from 'lucide-react';
 import { ProfileMenu } from './components/ProfileMenu';
-import { auth, db, googleProvider } from './firebase';
+import { auth, googleProvider } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, getFirestore } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from './utils/firestoreError';
 
 import { InventoryTab } from './components/InventoryTab';
+import MultiplayerTab from './components/MultiplayerTab';
+import FriendsTab from './components/FriendsTab';
 import { canEvolve } from './utils/evolution';
+import { useGameStore } from './store/useGameStore';
 
 
 // --- Types & Constants ---
 
-type Rarity = 'Common' | 'Rare' | 'Mythical' | 'Legendary';
+type Rarity = 'Común' | 'Poco común' | 'Raro' | 'Legendario' | 'Pseudo-legendario' | 'Singular (Mítico)' | 'Ultraente' | 'Pokémon Paradoja';
 
 export type StatusCondition = 'None' | 'Burn' | 'Sleep' | 'Poison' | 'Paralysis' | 'Freeze';
 
@@ -128,6 +134,7 @@ interface PokemonCard extends PokemonBase {
   status?: StatusCondition;
   isEvolved: boolean;
   isShiny: boolean;
+  sprite?: string;
   fatigue: number; // 0-100
   moral: number; // 0-100
   happiness: number; // 0-255
@@ -419,7 +426,7 @@ const getTypeGradient = (type: string) => {
 };
 
 const RARITY_CONFIG: Record<Rarity, { color: string, bg: string, border: string, initialMaxLevel: number, multiplier: number, label: string, statGain: number, baseStatRange: [number, number], glow: string, shadow: string }> = {
-  Common: { 
+  'Común': { 
     color: 'text-zinc-400', 
     bg: 'bg-zinc-900/80', 
     border: 'border-zinc-700/50', 
@@ -431,7 +438,19 @@ const RARITY_CONFIG: Record<Rarity, { color: string, bg: string, border: string,
     glow: 'from-zinc-500/5 to-transparent',
     shadow: 'shadow-zinc-900/20'
   },
-  Rare: { 
+  'Poco común': { 
+    color: 'text-green-400', 
+    bg: 'bg-green-950/80', 
+    border: 'border-green-500/40', 
+    initialMaxLevel: 12, 
+    multiplier: 1.1, 
+    label: 'Poco común', 
+    statGain: 2, 
+    baseStatRange: [35, 50],
+    glow: 'from-green-500/10 to-transparent',
+    shadow: 'shadow-green-900/30'
+  },
+  'Raro': { 
     color: 'text-blue-400', 
     bg: 'bg-blue-950/80', 
     border: 'border-blue-500/40', 
@@ -443,19 +462,19 @@ const RARITY_CONFIG: Record<Rarity, { color: string, bg: string, border: string,
     glow: 'from-blue-500/10 to-transparent',
     shadow: 'shadow-blue-900/30'
   },
-  Mythical: { 
-    color: 'text-purple-400', 
-    bg: 'bg-purple-950/80', 
-    border: 'border-purple-500/40', 
-    initialMaxLevel: 20, 
-    multiplier: 1.5, 
-    label: 'Mítico', 
-    statGain: 4, 
-    baseStatRange: [55, 75],
-    glow: 'from-purple-500/20 to-transparent',
-    shadow: 'shadow-purple-900/40'
+  'Pseudo-legendario': { 
+    color: 'text-indigo-400', 
+    bg: 'bg-indigo-950/80', 
+    border: 'border-indigo-500/40', 
+    initialMaxLevel: 25, 
+    multiplier: 1.8, 
+    label: 'Pseudo-legendario', 
+    statGain: 5, 
+    baseStatRange: [65, 85],
+    glow: 'from-indigo-500/20 to-transparent',
+    shadow: 'shadow-indigo-900/40'
   },
-  Legendary: { 
+  'Legendario': { 
     color: 'text-amber-400', 
     bg: 'bg-amber-950/80', 
     border: 'border-amber-500/40', 
@@ -466,6 +485,42 @@ const RARITY_CONFIG: Record<Rarity, { color: string, bg: string, border: string,
     baseStatRange: [75, 100],
     glow: 'from-amber-500/30 to-transparent',
     shadow: 'shadow-amber-900/50'
+  },
+  'Singular (Mítico)': { 
+    color: 'text-purple-400', 
+    bg: 'bg-purple-950/80', 
+    border: 'border-purple-500/40', 
+    initialMaxLevel: 30, 
+    multiplier: 2.0, 
+    label: 'Singular', 
+    statGain: 6, 
+    baseStatRange: [75, 100],
+    glow: 'from-purple-500/30 to-transparent',
+    shadow: 'shadow-purple-900/50'
+  },
+  'Ultraente': { 
+    color: 'text-rose-400', 
+    bg: 'bg-rose-950/80', 
+    border: 'border-rose-500/40', 
+    initialMaxLevel: 30, 
+    multiplier: 2.0, 
+    label: 'Ultraente', 
+    statGain: 6, 
+    baseStatRange: [75, 100],
+    glow: 'from-rose-500/30 to-transparent',
+    shadow: 'shadow-rose-900/50'
+  },
+  'Pokémon Paradoja': { 
+    color: 'text-cyan-400', 
+    bg: 'bg-cyan-950/80', 
+    border: 'border-cyan-500/40', 
+    initialMaxLevel: 30, 
+    multiplier: 2.0, 
+    label: 'Paradoja', 
+    statGain: 6, 
+    baseStatRange: [75, 100],
+    glow: 'from-cyan-500/30 to-transparent',
+    shadow: 'shadow-cyan-900/50'
   },
 };
 
@@ -488,10 +543,6 @@ const GYMS: Gym[] = [
   { id: 'gym7', name: 'Gimnasio Isla Canela', leader: 'Blaine', type: 'Fire', badgeName: 'Medalla Volcán', level: 45 },
   { id: 'gym8', name: 'Gimnasio Ciudad Verde', leader: 'Giovanni', type: 'Ground', badgeName: 'Medalla Tierra', level: 50 },
 ];
-
-const getRarity = (p: PokemonBase): Rarity => {
-  return getPokemonRarity(p);
-};
 
 export const POKEDEX_BASE: PokemonBase[] = [
   {
@@ -15528,26 +15579,7380 @@ export const POKEDEX_BASE: PokemonBase[] = [
       "def": 65,
       "spe": 60
     }
+  },
+  {
+    "id": 701,
+    "name": "Hawlucha",
+    "types": [
+      "Fighting",
+      "Flying"
+    ],
+    "ability": "Limber",
+    "evolutionChain": [
+      701
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "A pesar de ser un Pokémon de pequeña estatura, su pericia en el combate le permite plantar cara a Pokémon como Machamp o Hariyama.",
+    "stats": {
+      "hp": 78,
+      "atk": 92,
+      "def": 75,
+      "spe": 118
+    },
+    "megaId": 10300
+  },
+  {
+    "id": 702,
+    "name": "Dedenne",
+    "types": [
+      "Electric",
+      "Fairy"
+    ],
+    "ability": "Cheek Pouch",
+    "evolutionChain": [
+      702
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 431,
+    "description": "Sus bigotes hacen la función de antenas, por lo que puede enviar y recibir ondas eléctricas para comunicarse a grandes distancias.",
+    "stats": {
+      "hp": 67,
+      "atk": 58,
+      "def": 57,
+      "spe": 101
+    }
+  },
+  {
+    "id": 703,
+    "name": "Carbink",
+    "types": [
+      "Rock",
+      "Fairy"
+    ],
+    "ability": "Clear Body",
+    "evolutionChain": [
+      703
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "Nace en las profundidades subterráneas, a altas temperaturas y a gran presión. Irradia energía por la roca que tiene en la cabeza.",
+    "stats": {
+      "hp": 50,
+      "atk": 50,
+      "def": 150,
+      "spe": 50
+    }
+  },
+  {
+    "id": 704,
+    "name": "Goomy",
+    "types": [
+      "Dragon"
+    ],
+    "ability": "Sap Sipper",
+    "evolutionChain": [
+      704
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 300,
+    "description": "Es el Pokémon de tipo Dragón más débil. Habita en zonas oscuras y húmedas para evitar que su viscoso cuerpo se seque.",
+    "stats": {
+      "hp": 45,
+      "atk": 50,
+      "def": 35,
+      "spe": 40
+    }
+  },
+  {
+    "id": 705,
+    "name": "Sliggoo",
+    "types": [
+      "Dragon"
+    ],
+    "ability": "Sap Sipper",
+    "evolutionChain": [
+      705
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 452,
+    "description": "Segrega una mucosidad que corroe todo lo que toca y consigue así ahuyentar al enemigo. Sus ojos han involucionado, por lo que no puede ver.",
+    "stats": {
+      "hp": 68,
+      "atk": 75,
+      "def": 53,
+      "spe": 60
+    }
+  },
+  {
+    "id": 706,
+    "name": "Goodra",
+    "types": [
+      "Dragon"
+    ],
+    "ability": "Sap Sipper",
+    "evolutionChain": [
+      706
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pseudo-legendario",
+    "baseStatsSum": 600,
+    "description": "Pokémon de tipo Dragón muy afable al que le gusta abrazar con efusión a su Entrenador, aunque después lo deja totalmente pringado.",
+    "stats": {
+      "hp": 90,
+      "atk": 100,
+      "def": 70,
+      "spe": 80
+    }
+  },
+  {
+    "id": 707,
+    "name": "Klefki",
+    "types": [
+      "Steel",
+      "Fairy"
+    ],
+    "ability": "Prankster",
+    "evolutionChain": [
+      707
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 470,
+    "description": "Tiene el hábito de coleccionar llaves. Cuando un enemigo lo ataca, las hace tintinear como método de intimidación.",
+    "stats": {
+      "hp": 57,
+      "atk": 80,
+      "def": 91,
+      "spe": 75
+    }
+  },
+  {
+    "id": 708,
+    "name": "Phantump",
+    "types": [
+      "Ghost",
+      "Grass"
+    ],
+    "ability": "Natural Cure",
+    "evolutionChain": [
+      708
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 309,
+    "description": "Pokémon que nace cuando un espíritu se adentra en un tocón podrido. Habita en bosques que son poco frecuentados por humanos.",
+    "stats": {
+      "hp": 43,
+      "atk": 70,
+      "def": 48,
+      "spe": 38
+    }
+  },
+  {
+    "id": 709,
+    "name": "Trevenant",
+    "types": [
+      "Ghost",
+      "Grass"
+    ],
+    "ability": "Natural Cure",
+    "evolutionChain": [
+      709
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 474,
+    "description": "Puede controlar los árboles a su voluntad. Retiene hasta el fin de sus días a los humanos que se adentran en el bosque y lo mancillan.",
+    "stats": {
+      "hp": 85,
+      "atk": 110,
+      "def": 76,
+      "spe": 56
+    }
+  },
+  {
+    "id": 710,
+    "name": "Pumpkaboo-average",
+    "types": [
+      "Ghost",
+      "Grass"
+    ],
+    "ability": "Pickup",
+    "evolutionChain": [
+      710
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 335,
+    "description": "En el interior de la calabaza reside un espíritu que ha permanecido atrapado en este mundo. Entra en acción al caer la noche.",
+    "stats": {
+      "hp": 49,
+      "atk": 66,
+      "def": 70,
+      "spe": 51
+    }
+  },
+  {
+    "id": 711,
+    "name": "Gourgeist-average",
+    "types": [
+      "Ghost",
+      "Grass"
+    ],
+    "ability": "Pickup",
+    "evolutionChain": [
+      711
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 494,
+    "description": "En las noches de luna nueva deambula por las calles de las ciudades y emite espeluznantes alaridos que maldicen a quienes los oyen.",
+    "stats": {
+      "hp": 65,
+      "atk": 90,
+      "def": 122,
+      "spe": 84
+    }
+  },
+  {
+    "id": 712,
+    "name": "Bergmite",
+    "types": [
+      "Ice"
+    ],
+    "ability": "Own Tempo",
+    "evolutionChain": [
+      712
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 304,
+    "description": "Envuelve su cuerpo en una capa de hielo que le permite evitar los ataques del enemigo. Si se resquebraja, la recompone con aire gélido.",
+    "stats": {
+      "hp": 55,
+      "atk": 69,
+      "def": 85,
+      "spe": 28
+    }
+  },
+  {
+    "id": 713,
+    "name": "Avalugg",
+    "types": [
+      "Ice"
+    ],
+    "ability": "Own Tempo",
+    "evolutionChain": [
+      713
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 514,
+    "description": "Su cuerpo, cubierto de hielo, es tan duro como el propio acero. Su abultada figura le permite arramblar con todo lo que se encuentra a su paso.",
+    "stats": {
+      "hp": 95,
+      "atk": 117,
+      "def": 184,
+      "spe": 28
+    }
+  },
+  {
+    "id": 714,
+    "name": "Noibat",
+    "types": [
+      "Flying",
+      "Dragon"
+    ],
+    "ability": "Frisk",
+    "evolutionChain": [
+      714
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 245,
+    "description": "Habita en cuevas donde reina la más absoluta oscuridad y emite ondas ultrasónicas de 200 000 Hz a través de sus enormes orejas.",
+    "stats": {
+      "hp": 40,
+      "atk": 30,
+      "def": 35,
+      "spe": 55
+    }
+  },
+  {
+    "id": 715,
+    "name": "Noivern",
+    "types": [
+      "Flying",
+      "Dragon"
+    ],
+    "ability": "Frisk",
+    "evolutionChain": [
+      715
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 535,
+    "description": "Surca el cielo nocturno cuando ni siquiera la luna brilla y ataca a presas incautas. Es imbatible en combates que tienen lugar a oscuras.",
+    "stats": {
+      "hp": 85,
+      "atk": 70,
+      "def": 80,
+      "spe": 123
+    }
+  },
+  {
+    "id": 716,
+    "name": "Xerneas",
+    "types": [
+      "Fairy"
+    ],
+    "ability": "Fairy Aura",
+    "evolutionChain": [
+      716
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 680,
+    "description": "Según las leyendas, puede compartir el secreto de la vida eterna. Ha despertado tras dormir durante mil años bajo la apariencia de un árbol.",
+    "stats": {
+      "hp": 126,
+      "atk": 131,
+      "def": 95,
+      "spe": 99
+    }
+  },
+  {
+    "id": 717,
+    "name": "Yveltal",
+    "types": [
+      "Dark",
+      "Flying"
+    ],
+    "ability": "Dark Aura",
+    "evolutionChain": [
+      717
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 680,
+    "description": "Pokémon legendario que, al extender sus alas y las plumas de la cola, emite un brillo carmesí que absorbe la energía vital de su enemigo.",
+    "stats": {
+      "hp": 126,
+      "atk": 131,
+      "def": 95,
+      "spe": 99
+    }
+  },
+  {
+    "id": 718,
+    "name": "Zygarde-50",
+    "types": [
+      "Dragon",
+      "Ground"
+    ],
+    "ability": "Aura Break",
+    "evolutionChain": [
+      718
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 600,
+    "description": "Cuando el ecosistema de Kalos se encuentra en peligro, aparece y revela su poder secreto.",
+    "stats": {
+      "hp": 108,
+      "atk": 100,
+      "def": 121,
+      "spe": 95
+    },
+    "megaId": 10301
+  },
+  {
+    "id": 719,
+    "name": "Diancie",
+    "types": [
+      "Rock",
+      "Fairy"
+    ],
+    "ability": "Clear Body",
+    "evolutionChain": [
+      719
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 600,
+    "description": "Es una transformación súbita de Carbink. Se dice que su cuerpo, que irradia destellos rosados, es lo más bonito de este mundo.",
+    "stats": {
+      "hp": 50,
+      "atk": 100,
+      "def": 150,
+      "spe": 50
+    },
+    "megaId": 10075
+  },
+  {
+    "id": 720,
+    "name": "Hoopa",
+    "types": [
+      "Psychic",
+      "Ghost"
+    ],
+    "ability": "Magician",
+    "evolutionChain": [
+      720
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 600,
+    "description": "Este problemático Pokémon envía cualquier objeto a lugares remotos mediante unos anillos que deforman el espacio.",
+    "stats": {
+      "hp": 80,
+      "atk": 110,
+      "def": 60,
+      "spe": 70
+    }
+  },
+  {
+    "id": 721,
+    "name": "Volcanion",
+    "types": [
+      "Fire",
+      "Water"
+    ],
+    "ability": "Water Absorb",
+    "evolutionChain": [
+      721
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 600,
+    "description": "Expulsa vapor y desaparece entre la densa niebla. Dicen que habita en montañas solitarias.",
+    "stats": {
+      "hp": 80,
+      "atk": 110,
+      "def": 120,
+      "spe": 70
+    }
+  },
+  {
+    "id": 722,
+    "name": "Rowlet",
+    "types": [
+      "Grass",
+      "Flying"
+    ],
+    "ability": "Overgrow",
+    "evolutionChain": [
+      722
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 320,
+    "description": "Es cauteloso, desconfiado y de naturaleza nocturna. Durante el día acumula energía mediante la fotosíntesis.",
+    "stats": {
+      "hp": 68,
+      "atk": 55,
+      "def": 55,
+      "spe": 42
+    }
+  },
+  {
+    "id": 723,
+    "name": "Dartrix",
+    "types": [
+      "Grass",
+      "Flying"
+    ],
+    "ability": "Overgrow",
+    "evolutionChain": [
+      723
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 420,
+    "description": "Es un poco coqueto, por lo que, cuando puede, se acicala las alas. En ocasiones se niega a combatir por temor a mancharse las plumas.",
+    "stats": {
+      "hp": 78,
+      "atk": 75,
+      "def": 75,
+      "spe": 52
+    }
+  },
+  {
+    "id": 724,
+    "name": "Decidueye",
+    "types": [
+      "Grass",
+      "Ghost"
+    ],
+    "ability": "Overgrow",
+    "evolutionChain": [
+      724
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "Las plumas de sus alas le sirven de flechas con las que puede acertar a un guijarro a 100 m.",
+    "stats": {
+      "hp": 78,
+      "atk": 107,
+      "def": 75,
+      "spe": 70
+    }
+  },
+  {
+    "id": 725,
+    "name": "Litten",
+    "types": [
+      "Fire"
+    ],
+    "ability": "Blaze",
+    "evolutionChain": [
+      725
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 320,
+    "description": "Prende las bolas de pelo que se forman en su estómago tras acicalarse. Las llamas que escupe tienen formas variopintas.",
+    "stats": {
+      "hp": 45,
+      "atk": 65,
+      "def": 40,
+      "spe": 70
+    }
+  },
+  {
+    "id": 726,
+    "name": "Torracat",
+    "types": [
+      "Fire"
+    ],
+    "ability": "Blaze",
+    "evolutionChain": [
+      726
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 420,
+    "description": "Luce al cuello un cascabel incandescente que tintinea con fuerza cuando desprende llamas.",
+    "stats": {
+      "hp": 65,
+      "atk": 85,
+      "def": 50,
+      "spe": 90
+    }
+  },
+  {
+    "id": 727,
+    "name": "Incineroar",
+    "types": [
+      "Fire",
+      "Dark"
+    ],
+    "ability": "Blaze",
+    "evolutionChain": [
+      727
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "Posee un carácter rudo y egoísta. Si un Entrenador no le cae en gracia, ignora sus órdenes con total impasibilidad.",
+    "stats": {
+      "hp": 95,
+      "atk": 115,
+      "def": 90,
+      "spe": 60
+    }
+  },
+  {
+    "id": 728,
+    "name": "Popplio",
+    "types": [
+      "Water"
+    ],
+    "ability": "Torrent",
+    "evolutionChain": [
+      728
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 320,
+    "description": "Se le conoce por su diligencia y predisposición. Segrega agua por la nariz para hinchar globos con los que golpea a sus rivales.",
+    "stats": {
+      "hp": 50,
+      "atk": 54,
+      "def": 54,
+      "spe": 40
+    }
+  },
+  {
+    "id": 729,
+    "name": "Brionne",
+    "types": [
+      "Water"
+    ],
+    "ability": "Torrent",
+    "evolutionChain": [
+      729
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 420,
+    "description": "Un bailarín consumado. Crea globos de agua con los que golpea a sus rivales una y otra vez sin dejar de bailar.",
+    "stats": {
+      "hp": 60,
+      "atk": 69,
+      "def": 69,
+      "spe": 50
+    }
+  },
+  {
+    "id": 730,
+    "name": "Primarina",
+    "types": [
+      "Water",
+      "Fairy"
+    ],
+    "ability": "Torrent",
+    "evolutionChain": [
+      730
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "Es capaz de controlar globos de agua mediante un canto cuya melodía se ha transmitido entre los suyos de generación en generación.",
+    "stats": {
+      "hp": 80,
+      "atk": 74,
+      "def": 74,
+      "spe": 60
+    }
+  },
+  {
+    "id": 731,
+    "name": "Pikipek",
+    "types": [
+      "Normal",
+      "Flying"
+    ],
+    "ability": "Keen Eye",
+    "evolutionChain": [
+      731
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 265,
+    "description": "Hace agujeros en los árboles a una velocidad de 16 picotazos por segundo y los utiliza como despensa o como su nido.",
+    "stats": {
+      "hp": 35,
+      "atk": 75,
+      "def": 30,
+      "spe": 65
+    }
+  },
+  {
+    "id": 732,
+    "name": "Trumbeak",
+    "types": [
+      "Normal",
+      "Flying"
+    ],
+    "ability": "Keen Eye",
+    "evolutionChain": [
+      732
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 355,
+    "description": "Almacena en su pico las semillas de las bayas de las que se alimenta para usarlas como arma contra enemigos y posibles presas.",
+    "stats": {
+      "hp": 55,
+      "atk": 85,
+      "def": 50,
+      "spe": 75
+    }
+  },
+  {
+    "id": 733,
+    "name": "Toucannon",
+    "types": [
+      "Normal",
+      "Flying"
+    ],
+    "ability": "Keen Eye",
+    "evolutionChain": [
+      733
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "Cuando va a combatir, calienta su pico hasta temperaturas que superan los 100 °C, lo que puede causar graves quemaduras al contacto.",
+    "stats": {
+      "hp": 80,
+      "atk": 120,
+      "def": 75,
+      "spe": 60
+    }
+  },
+  {
+    "id": 734,
+    "name": "Yungoos",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Stakeout",
+    "evolutionChain": [
+      734
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 253,
+    "description": "Sus afilados colmillos lo atraviesan todo. No es autóctono de Alola, sino que proviene de otra región.",
+    "stats": {
+      "hp": 48,
+      "atk": 70,
+      "def": 30,
+      "spe": 45
+    }
+  },
+  {
+    "id": 735,
+    "name": "Gumshoos",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Stakeout",
+    "evolutionChain": [
+      735
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 418,
+    "description": "Al detectar el rastro de una presa, la acecha con tenacidad, pero al ponerse el sol le vence el sueño.",
+    "stats": {
+      "hp": 88,
+      "atk": 110,
+      "def": 60,
+      "spe": 45
+    }
+  },
+  {
+    "id": 736,
+    "name": "Grubbin",
+    "types": [
+      "Bug"
+    ],
+    "ability": "Swarm",
+    "evolutionChain": [
+      736
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 300,
+    "description": "Con sus duras mandíbulas arranca la corteza de los árboles y sorbe la savia. Suele habitar bajo tierra.",
+    "stats": {
+      "hp": 47,
+      "atk": 62,
+      "def": 45,
+      "spe": 46
+    }
+  },
+  {
+    "id": 737,
+    "name": "Charjabug",
+    "types": [
+      "Bug",
+      "Electric"
+    ],
+    "ability": "Battery",
+    "evolutionChain": [
+      737
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 400,
+    "description": "Almacena electricidad en su cuerpo, lo que puede resultar útil en numerosas situaciones, como al salir de acampada.",
+    "stats": {
+      "hp": 57,
+      "atk": 82,
+      "def": 95,
+      "spe": 36
+    }
+  },
+  {
+    "id": 738,
+    "name": "Vikavolt",
+    "types": [
+      "Bug",
+      "Electric"
+    ],
+    "ability": "Levitate",
+    "evolutionChain": [
+      738
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "Sobrevuela un área en busca de presas. Puede concentrar una potente carga eléctrica entre sus mandíbulas para atacar a sus rivales.",
+    "stats": {
+      "hp": 77,
+      "atk": 70,
+      "def": 90,
+      "spe": 43
+    }
+  },
+  {
+    "id": 739,
+    "name": "Crabrawler",
+    "types": [
+      "Fighting"
+    ],
+    "ability": "Hyper Cutter",
+    "evolutionChain": [
+      739
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 338,
+    "description": "Protege sus puntos débiles con las pinzas y propina puñetazos en cuanto tiene ocasión. Cuando pierde, llora lágrimas espumosas.",
+    "stats": {
+      "hp": 47,
+      "atk": 82,
+      "def": 57,
+      "spe": 63
+    }
+  },
+  {
+    "id": 740,
+    "name": "Crabominable",
+    "types": [
+      "Fighting",
+      "Ice"
+    ],
+    "ability": "Hyper Cutter",
+    "evolutionChain": [
+      740
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 478,
+    "description": "Tras perderse intentando coronar una alta montaña, desarrolló una capa de pelo para protegerse del frío.",
+    "stats": {
+      "hp": 97,
+      "atk": 132,
+      "def": 77,
+      "spe": 43
+    },
+    "megaId": 10315
+  },
+  {
+    "id": 741,
+    "name": "Oricorio-baile",
+    "types": [
+      "Fire",
+      "Flying"
+    ],
+    "ability": "Dancer",
+    "evolutionChain": [
+      741
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 476,
+    "description": "Junta las alas y lanza voraces llamas al rival. Su ataque se asemeja a una elaborada coreografía de fuego.",
+    "stats": {
+      "hp": 75,
+      "atk": 70,
+      "def": 70,
+      "spe": 93
+    }
+  },
+  {
+    "id": 742,
+    "name": "Cutiefly",
+    "types": [
+      "Bug",
+      "Fairy"
+    ],
+    "ability": "Honey Gather",
+    "evolutionChain": [
+      742
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 304,
+    "description": "Se alimenta de néctar y polen. Es capaz de detectar los capullos que están a punto de abrirse.",
+    "stats": {
+      "hp": 40,
+      "atk": 45,
+      "def": 40,
+      "spe": 84
+    }
+  },
+  {
+    "id": 743,
+    "name": "Ribombee",
+    "types": [
+      "Bug",
+      "Fairy"
+    ],
+    "ability": "Honey Gather",
+    "evolutionChain": [
+      743
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 464,
+    "description": "Fabrica varios tipos de bolas de polen. Algunas se usan como alimento y otras para el combate.",
+    "stats": {
+      "hp": 60,
+      "atk": 55,
+      "def": 60,
+      "spe": 124
+    }
+  },
+  {
+    "id": 744,
+    "name": "Rockruff",
+    "types": [
+      "Rock"
+    ],
+    "ability": "Keen Eye",
+    "evolutionChain": [
+      744
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 280,
+    "description": "Su carácter amigable lo convierte en el Pokémon ideal para Entrenadores novatos. Sin embargo, al crecer suele volverse un poco agresivo.",
+    "stats": {
+      "hp": 45,
+      "atk": 65,
+      "def": 40,
+      "spe": 60
+    }
+  },
+  {
+    "id": 745,
+    "name": "Lycanroc-midday",
+    "types": [
+      "Rock"
+    ],
+    "ability": "Keen Eye",
+    "evolutionChain": [
+      745
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 487,
+    "description": "Su velocidad desconcierta a sus rivales. Ataca con garras, colmillos y con las piedras afiladas de su melena.",
+    "stats": {
+      "hp": 75,
+      "atk": 115,
+      "def": 65,
+      "spe": 112
+    }
+  },
+  {
+    "id": 746,
+    "name": "Wishiwashi-solo",
+    "types": [
+      "Water"
+    ],
+    "ability": "Schooling",
+    "evolutionChain": [
+      746
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 175,
+    "description": "Al sentirse amenazado, sus ojos emiten cierto brillo, algo que atrae a otros miembros de su especie, y juntos luchan como un mismo ente.",
+    "stats": {
+      "hp": 45,
+      "atk": 20,
+      "def": 20,
+      "spe": 40
+    }
+  },
+  {
+    "id": 747,
+    "name": "Mareanie",
+    "types": [
+      "Poison",
+      "Water"
+    ],
+    "ability": "Merciless",
+    "evolutionChain": [
+      747
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 305,
+    "description": "Aturde a su presa con los aguijones venenosos de la cabeza. Cuando esta se debilita, la rodea con sus diez extremidades y la remata.",
+    "stats": {
+      "hp": 50,
+      "atk": 53,
+      "def": 62,
+      "spe": 45
+    }
+  },
+  {
+    "id": 748,
+    "name": "Toxapex",
+    "types": [
+      "Poison",
+      "Water"
+    ],
+    "ability": "Merciless",
+    "evolutionChain": [
+      748
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 495,
+    "description": "Se arrastra por el lecho marino con sus doce extremidades. Deja siempre una estela de restos de Corsola por donde pasa.",
+    "stats": {
+      "hp": 50,
+      "atk": 63,
+      "def": 152,
+      "spe": 35
+    }
+  },
+  {
+    "id": 749,
+    "name": "Mudbray",
+    "types": [
+      "Ground"
+    ],
+    "ability": "Own Tempo",
+    "evolutionChain": [
+      749
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 385,
+    "description": "El lodo que impregna sus patas le otorga una fuerte tracción, lo que le permite alcanzar altas velocidades al correr.",
+    "stats": {
+      "hp": 70,
+      "atk": 100,
+      "def": 70,
+      "spe": 45
+    }
+  },
+  {
+    "id": 750,
+    "name": "Mudsdale",
+    "types": [
+      "Ground"
+    ],
+    "ability": "Own Tempo",
+    "evolutionChain": [
+      750
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "El lodo que segrega por la boca se vuelve impermeable al secarse, por lo que solía usarse como capa aislante en las paredes de las casas.",
+    "stats": {
+      "hp": 100,
+      "atk": 125,
+      "def": 100,
+      "spe": 35
+    }
+  },
+  {
+    "id": 751,
+    "name": "Dewpider",
+    "types": [
+      "Water",
+      "Bug"
+    ],
+    "ability": "Water Bubble",
+    "evolutionChain": [
+      751
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 269,
+    "description": "Emerge a la superficie para alimentarse. La burbuja con la que se rodea le sirve para respirar y proteger su delicada cabeza.",
+    "stats": {
+      "hp": 38,
+      "atk": 40,
+      "def": 52,
+      "spe": 27
+    }
+  },
+  {
+    "id": 752,
+    "name": "Araquanid",
+    "types": [
+      "Water",
+      "Bug"
+    ],
+    "ability": "Water Bubble",
+    "evolutionChain": [
+      752
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 454,
+    "description": "Propina cabezazos con su burbuja. Los Pokémon de menor tamaño quedan atrapados en su interior y perecen ahogados.",
+    "stats": {
+      "hp": 68,
+      "atk": 70,
+      "def": 92,
+      "spe": 42
+    }
+  },
+  {
+    "id": 753,
+    "name": "Fomantis",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Leaf Guard",
+    "evolutionChain": [
+      753
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 250,
+    "description": "Mientras que de día duerme tranquilamente a la luz del sol, al caer la noche busca un sitio más seguro para dormir.",
+    "stats": {
+      "hp": 40,
+      "atk": 55,
+      "def": 35,
+      "spe": 35
+    }
+  },
+  {
+    "id": 754,
+    "name": "Lurantis",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Leaf Guard",
+    "evolutionChain": [
+      754
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 480,
+    "description": "Dedica mucho tiempo y esfuerzo a acicalarse y preservar sus vivos colores. A algunos ejemplares incluso les lleva todo el día.",
+    "stats": {
+      "hp": 70,
+      "atk": 105,
+      "def": 90,
+      "spe": 45
+    }
+  },
+  {
+    "id": 755,
+    "name": "Morelull",
+    "types": [
+      "Grass",
+      "Fairy"
+    ],
+    "ability": "Illuminate",
+    "evolutionChain": [
+      755
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 285,
+    "description": "Cuando titila, esparce esporas luminosas a su alrededor. Todo aquel que ve esta luz cae en un profundo sueño.",
+    "stats": {
+      "hp": 40,
+      "atk": 35,
+      "def": 55,
+      "spe": 15
+    }
+  },
+  {
+    "id": 756,
+    "name": "Shiinotic",
+    "types": [
+      "Grass",
+      "Fairy"
+    ],
+    "ability": "Illuminate",
+    "evolutionChain": [
+      756
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 405,
+    "description": "Es peligroso adentrarse por la noche en un bosque habitado por Shiinotic. Su luz confunde a los caminantes, que terminan perdiéndose.",
+    "stats": {
+      "hp": 60,
+      "atk": 45,
+      "def": 80,
+      "spe": 30
+    }
+  },
+  {
+    "id": 757,
+    "name": "Salandit",
+    "types": [
+      "Poison",
+      "Fire"
+    ],
+    "ability": "Corrosion",
+    "evolutionChain": [
+      757
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 320,
+    "description": "Aturde a sus oponentes con un gas venenoso que produce al quemar sus fluidos corporales y luego se abalanza sobre ellos.",
+    "stats": {
+      "hp": 48,
+      "atk": 44,
+      "def": 40,
+      "spe": 77
+    }
+  },
+  {
+    "id": 758,
+    "name": "Salazzle",
+    "types": [
+      "Poison",
+      "Fire"
+    ],
+    "ability": "Corrosion",
+    "evolutionChain": [
+      758
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 480,
+    "description": "Por algún motivo desconocido, solo hay hembras. Suele formarse su propio harén compuesto por Salandit machos.",
+    "stats": {
+      "hp": 68,
+      "atk": 64,
+      "def": 60,
+      "spe": 117
+    }
+  },
+  {
+    "id": 759,
+    "name": "Stufful",
+    "types": [
+      "Normal",
+      "Fighting"
+    ],
+    "ability": "Fluffy",
+    "evolutionChain": [
+      759
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 340,
+    "description": "Pese a su aspecto encantador, cuando se enoja, sus pataletas son tan feroces que pueden derribar hasta a un luchador profesional.",
+    "stats": {
+      "hp": 70,
+      "atk": 75,
+      "def": 50,
+      "spe": 50
+    }
+  },
+  {
+    "id": 760,
+    "name": "Bewear",
+    "types": [
+      "Normal",
+      "Fighting"
+    ],
+    "ability": "Fluffy",
+    "evolutionChain": [
+      760
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "Es un Pokémon muy peligroso por su fuerza descomunal. Normalmente, se desaconseja penetrar en su hábitat.",
+    "stats": {
+      "hp": 120,
+      "atk": 125,
+      "def": 80,
+      "spe": 60
+    }
+  },
+  {
+    "id": 761,
+    "name": "Bounsweet",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Leaf Guard",
+    "evolutionChain": [
+      761
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 210,
+    "description": "Atraídos por el apetitoso aroma que desprende su cuerpo, los Toucannon los engullen con avidez sin ni siquiera masticar.",
+    "stats": {
+      "hp": 42,
+      "atk": 30,
+      "def": 38,
+      "spe": 32
+    }
+  },
+  {
+    "id": 762,
+    "name": "Steenee",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Leaf Guard",
+    "evolutionChain": [
+      762
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 290,
+    "description": "El cáliz de su cabeza se ha desarrollado y le protege todo el cuerpo. Es tan duro que no le importa que lo picoteen los Pokémon pájaro.",
+    "stats": {
+      "hp": 52,
+      "atk": 40,
+      "def": 48,
+      "spe": 62
+    }
+  },
+  {
+    "id": 763,
+    "name": "Tsareena",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Leaf Guard",
+    "evolutionChain": [
+      763
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 510,
+    "description": "Propinar patadas implacables es su especialidad. Patea a sus oponentes derrotados y proclama su victoria con una gran carcajada.",
+    "stats": {
+      "hp": 72,
+      "atk": 120,
+      "def": 98,
+      "spe": 72
+    }
+  },
+  {
+    "id": 764,
+    "name": "Comfey",
+    "types": [
+      "Fairy"
+    ],
+    "ability": "Flower Veil",
+    "evolutionChain": [
+      764
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "Prende flores en su tallo, que es muy rico en nutrientes. Las flores se revitalizan y desprenden una agradable fragancia.",
+    "stats": {
+      "hp": 51,
+      "atk": 52,
+      "def": 90,
+      "spe": 100
+    }
+  },
+  {
+    "id": 765,
+    "name": "Oranguru",
+    "types": [
+      "Normal",
+      "Psychic"
+    ],
+    "ability": "Inner Focus",
+    "evolutionChain": [
+      765
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 490,
+    "description": "Es un Pokémon famoso por su astucia e ingenio. Desprecia a los Entrenadores novatos y prefiere a los más veteranos.",
+    "stats": {
+      "hp": 90,
+      "atk": 60,
+      "def": 80,
+      "spe": 60
+    }
+  },
+  {
+    "id": 766,
+    "name": "Passimian",
+    "types": [
+      "Fighting"
+    ],
+    "ability": "Receiver",
+    "evolutionChain": [
+      766
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 490,
+    "description": "Suele ir en grupos de unos veinte ejemplares. Sus miembros permanecen siempre unidos y nunca se abandonan unos a otros.",
+    "stats": {
+      "hp": 100,
+      "atk": 120,
+      "def": 90,
+      "spe": 80
+    }
+  },
+  {
+    "id": 767,
+    "name": "Wimpod",
+    "types": [
+      "Bug",
+      "Water"
+    ],
+    "ability": "Wimp Out",
+    "evolutionChain": [
+      767
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 230,
+    "description": "Cuando se asusta, huye despavorido moviendo rápidamente sus múltiples patas. Deja el suelo limpio y pulido allí por donde pasa.",
+    "stats": {
+      "hp": 25,
+      "atk": 35,
+      "def": 40,
+      "spe": 80
+    }
+  },
+  {
+    "id": 768,
+    "name": "Golisopod",
+    "types": [
+      "Bug",
+      "Water"
+    ],
+    "ability": "Emergency Exit",
+    "evolutionChain": [
+      768
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "Gracias a su destreza y sus enormes y afiladas garras, puede cortar hasta el aire y el agua de un solo tajo.",
+    "stats": {
+      "hp": 75,
+      "atk": 125,
+      "def": 140,
+      "spe": 40
+    },
+    "megaId": 10316
+  },
+  {
+    "id": 769,
+    "name": "Sandygast",
+    "types": [
+      "Ghost",
+      "Ground"
+    ],
+    "ability": "Water Compaction",
+    "evolutionChain": [
+      769
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 320,
+    "description": "Surgió cuando una persona murió abandonada en plena calle y su resentimiento poseyó un montículo de arena apilado por un niño.",
+    "stats": {
+      "hp": 55,
+      "atk": 55,
+      "def": 80,
+      "spe": 15
+    }
+  },
+  {
+    "id": 770,
+    "name": "Palossand",
+    "types": [
+      "Ghost",
+      "Ground"
+    ],
+    "ability": "Water Compaction",
+    "evolutionChain": [
+      770
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 480,
+    "description": "Manipulando a la gente ha conseguido transformarse en todo un castillo de arena, lo que ha aumentado su poder maligno.",
+    "stats": {
+      "hp": 85,
+      "atk": 75,
+      "def": 110,
+      "spe": 35
+    }
+  },
+  {
+    "id": 771,
+    "name": "Pyukumuku",
+    "types": [
+      "Water"
+    ],
+    "ability": "Innards Out",
+    "evolutionChain": [
+      771
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 410,
+    "description": "Vive en las playas y en aguas poco profundas. Expulsa sus entrañas para engañar a sus depredadores y librarse de ellos.",
+    "stats": {
+      "hp": 55,
+      "atk": 60,
+      "def": 130,
+      "spe": 5
+    }
+  },
+  {
+    "id": 772,
+    "name": "Type-null",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Battle Armor",
+    "evolutionChain": [
+      772
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 534,
+    "description": "La pesada máscara le impide liberar toda su fuerza, que se cree que es extraordinaria.",
+    "stats": {
+      "hp": 95,
+      "atk": 95,
+      "def": 95,
+      "spe": 59
+    }
+  },
+  {
+    "id": 773,
+    "name": "Silvally",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Rks System",
+    "evolutionChain": [
+      773
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 570,
+    "description": "La confianza con su Entrenador ha despertado su potencial. Ahora es capaz de cambiar de tipo a voluntad durante el combate.",
+    "stats": {
+      "hp": 95,
+      "atk": 95,
+      "def": 95,
+      "spe": 95
+    }
+  },
+  {
+    "id": 774,
+    "name": "Minior-red-meteor",
+    "types": [
+      "Rock",
+      "Flying"
+    ],
+    "ability": "Shields Down",
+    "evolutionChain": [
+      774
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 440,
+    "description": "Vive en la capa de ozono hasta que su caparazón se hace demasiado pesado y cae sin remisión a tierra firme.",
+    "stats": {
+      "hp": 60,
+      "atk": 60,
+      "def": 100,
+      "spe": 60
+    }
+  },
+  {
+    "id": 775,
+    "name": "Komala",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Comatose",
+    "evolutionChain": [
+      775
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 480,
+    "description": "Pasa la vida entera sumido en un profundo sueño. Toda su actividad parece reflejar los sueños que tiene en ese momento.",
+    "stats": {
+      "hp": 65,
+      "atk": 115,
+      "def": 65,
+      "spe": 65
+    }
+  },
+  {
+    "id": 776,
+    "name": "Turtonator",
+    "types": [
+      "Fire",
+      "Dragon"
+    ],
+    "ability": "Shell Armor",
+    "evolutionChain": [
+      776
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "Posee un caparazón que estalla al contacto. El orificio que se aprecia en su vientre es su punto débil.",
+    "stats": {
+      "hp": 60,
+      "atk": 78,
+      "def": 135,
+      "spe": 36
+    }
+  },
+  {
+    "id": 777,
+    "name": "Togedemaru",
+    "types": [
+      "Electric",
+      "Steel"
+    ],
+    "ability": "Iron Barbs",
+    "evolutionChain": [
+      777
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 435,
+    "description": "Cuando se siente amenazado, eriza las púas de su lomo para pinchar a quien ose atacarlo.",
+    "stats": {
+      "hp": 65,
+      "atk": 98,
+      "def": 63,
+      "spe": 96
+    }
+  },
+  {
+    "id": 778,
+    "name": "Mimikyu-disguised",
+    "types": [
+      "Ghost",
+      "Fairy"
+    ],
+    "ability": "Disguise",
+    "evolutionChain": [
+      778
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 476,
+    "description": "Su verdadero aspecto es un misterio total. Un investigador que intentó mirar dentro del saco recibió, literalmente, un susto de muerte.",
+    "stats": {
+      "hp": 55,
+      "atk": 90,
+      "def": 80,
+      "spe": 96
+    }
+  },
+  {
+    "id": 779,
+    "name": "Bruxish",
+    "types": [
+      "Water",
+      "Psychic"
+    ],
+    "ability": "Dazzling",
+    "evolutionChain": [
+      779
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 475,
+    "description": "Cuando la protuberancia que tiene en la cabeza emite poderes psíquicos, se escucha como un ruido de dientes rechinando muy molesto.",
+    "stats": {
+      "hp": 68,
+      "atk": 105,
+      "def": 70,
+      "spe": 92
+    }
+  },
+  {
+    "id": 780,
+    "name": "Drampa",
+    "types": [
+      "Normal",
+      "Dragon"
+    ],
+    "ability": "Berserk",
+    "evolutionChain": [
+      780
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "Es de naturaleza mansa, pero si se le provoca y monta en cólera, destruye todo lo que le rodea con su aliento devastador.",
+    "stats": {
+      "hp": 78,
+      "atk": 60,
+      "def": 85,
+      "spe": 36
+    },
+    "megaId": 10302
+  },
+  {
+    "id": 781,
+    "name": "Dhelmise",
+    "types": [
+      "Ghost",
+      "Grass"
+    ],
+    "ability": "Steelworker",
+    "evolutionChain": [
+      781
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 517,
+    "description": "Los giros de su enorme ancla son capaces de noquear al mismísimo Wailord de un solo golpe. El alga verde es su verdadero cuerpo.",
+    "stats": {
+      "hp": 70,
+      "atk": 131,
+      "def": 100,
+      "spe": 40
+    }
+  },
+  {
+    "id": 782,
+    "name": "Jangmo-o",
+    "types": [
+      "Dragon"
+    ],
+    "ability": "Bulletproof",
+    "evolutionChain": [
+      782
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 300,
+    "description": "Comunica sus sentimientos haciendo sonar sus escamas. El ruido metálico producido reverbera en las altas montañas donde habita.",
+    "stats": {
+      "hp": 45,
+      "atk": 55,
+      "def": 65,
+      "spe": 45
+    }
+  },
+  {
+    "id": 783,
+    "name": "Hakamo-o",
+    "types": [
+      "Dragon",
+      "Fighting"
+    ],
+    "ability": "Bulletproof",
+    "evolutionChain": [
+      783
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 420,
+    "description": "Se lanza sobre su presa entonando un grito de guerra. Golpea al enemigo y lo hace trizas con sus escamas.",
+    "stats": {
+      "hp": 55,
+      "atk": 75,
+      "def": 90,
+      "spe": 65
+    }
+  },
+  {
+    "id": 784,
+    "name": "Kommo-o",
+    "types": [
+      "Dragon",
+      "Fighting"
+    ],
+    "ability": "Bulletproof",
+    "evolutionChain": [
+      784
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pseudo-legendario",
+    "baseStatsSum": 600,
+    "description": "Al avistar a su enemigo, lo intimida con el tintineo que producen las escamas de su cola. Los más débiles se asustan y huyen.",
+    "stats": {
+      "hp": 75,
+      "atk": 110,
+      "def": 125,
+      "spe": 85
+    }
+  },
+  {
+    "id": 785,
+    "name": "Tapu-koko",
+    "types": [
+      "Electric",
+      "Fairy"
+    ],
+    "ability": "Electric Surge",
+    "evolutionChain": [
+      785
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 570,
+    "description": "El espíritu guardián de Melemele, curioso e inquisitivo. Invoca nubes de tormenta y acumula el poder de los rayos en su cuerpo.",
+    "stats": {
+      "hp": 70,
+      "atk": 115,
+      "def": 85,
+      "spe": 130
+    }
+  },
+  {
+    "id": 786,
+    "name": "Tapu-lele",
+    "types": [
+      "Psychic",
+      "Fairy"
+    ],
+    "ability": "Psychic Surge",
+    "evolutionChain": [
+      786
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 570,
+    "description": "El espíritu guardián de Akala, tan inocente como cruel. La fragancia de las flores constituye su fuente de energía.",
+    "stats": {
+      "hp": 70,
+      "atk": 85,
+      "def": 75,
+      "spe": 95
+    }
+  },
+  {
+    "id": 787,
+    "name": "Tapu-bulu",
+    "types": [
+      "Grass",
+      "Fairy"
+    ],
+    "ability": "Grassy Surge",
+    "evolutionChain": [
+      787
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 570,
+    "description": "Arranca de cuajo árboles grandes para hacerlos girar. Vuelve exuberante la vegetación y luego absorbe su energía.",
+    "stats": {
+      "hp": 70,
+      "atk": 130,
+      "def": 115,
+      "spe": 75
+    }
+  },
+  {
+    "id": 788,
+    "name": "Tapu-fini",
+    "types": [
+      "Water",
+      "Fairy"
+    ],
+    "ability": "Misty Surge",
+    "evolutionChain": [
+      788
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 570,
+    "description": "Desconcierta al enemigo provocando una espesa niebla que se convierte en su perdición. Las corrientes marinas son su fuente de energía.",
+    "stats": {
+      "hp": 70,
+      "atk": 75,
+      "def": 115,
+      "spe": 85
+    }
+  },
+  {
+    "id": 789,
+    "name": "Cosmog",
+    "types": [
+      "Psychic"
+    ],
+    "ability": "Unaware",
+    "evolutionChain": [
+      789
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 200,
+    "description": "Su cuerpo se compone de una materia gaseosa inestable. Crece poco a poco al acumular las motas de polvo que flotan en el aire.",
+    "stats": {
+      "hp": 43,
+      "atk": 29,
+      "def": 31,
+      "spe": 37
+    }
+  },
+  {
+    "id": 790,
+    "name": "Cosmoem",
+    "types": [
+      "Psychic"
+    ],
+    "ability": "Sturdy",
+    "evolutionChain": [
+      790
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 400,
+    "description": "Permanece inmóvil, como si estuviera muerto, aunque al tocarlo se percibe un ligero calor. Antaño se le llamaba Crisálida de las Estrellas.",
+    "stats": {
+      "hp": 43,
+      "atk": 29,
+      "def": 131,
+      "spe": 37
+    }
+  },
+  {
+    "id": 791,
+    "name": "Solgaleo",
+    "types": [
+      "Psychic",
+      "Steel"
+    ],
+    "ability": "Full Metal Body",
+    "evolutionChain": [
+      791
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 680,
+    "description": "Se cree que proviene de otro mundo. El brillo que emite su cuerpo es tal que puede hacer que la noche más profunda parezca pleno día.",
+    "stats": {
+      "hp": 137,
+      "atk": 137,
+      "def": 107,
+      "spe": 97
+    }
+  },
+  {
+    "id": 792,
+    "name": "Lunala",
+    "types": [
+      "Psychic",
+      "Ghost"
+    ],
+    "ability": "Shadow Shield",
+    "evolutionChain": [
+      792
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 680,
+    "description": "Se dice que es la evolución final hembra de Cosmog. Su tercer ojo aparece cuando se traslada a un mundo distinto.",
+    "stats": {
+      "hp": 137,
+      "atk": 113,
+      "def": 89,
+      "spe": 97
+    }
+  },
+  {
+    "id": 793,
+    "name": "Nihilego",
+    "types": [
+      "Rock",
+      "Poison"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      793
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 570,
+    "description": "Un Ultraente envuelto en misterio. Se dice que las víctimas a las que posee se vuelven agresivas.",
+    "stats": {
+      "hp": 109,
+      "atk": 53,
+      "def": 47,
+      "spe": 103
+    }
+  },
+  {
+    "id": 794,
+    "name": "Buzzwole",
+    "types": [
+      "Bug",
+      "Fighting"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      794
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 570,
+    "description": "Un Ultraente procedente de otro mundo. Se desconoce si exhibe su robusto cuerpo a modo de amenaza o para que lo admiren.",
+    "stats": {
+      "hp": 107,
+      "atk": 139,
+      "def": 139,
+      "spe": 79
+    }
+  },
+  {
+    "id": 795,
+    "name": "Pheromosa",
+    "types": [
+      "Bug",
+      "Fighting"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      795
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 570,
+    "description": "Uno de los temibles Ultraentes. Se dice que ha sido avistado recorriendo la superficie terrestre a velocidades de vértigo.",
+    "stats": {
+      "hp": 71,
+      "atk": 137,
+      "def": 37,
+      "spe": 151
+    }
+  },
+  {
+    "id": 796,
+    "name": "Xurkitree",
+    "types": [
+      "Electric"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      796
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 570,
+    "description": "Un Ultraente rodeado de misterio. Se dice que su cuerpo desprende descargas eléctricas de inmensa potencia.",
+    "stats": {
+      "hp": 83,
+      "atk": 89,
+      "def": 71,
+      "spe": 83
+    }
+  },
+  {
+    "id": 797,
+    "name": "Celesteela",
+    "types": [
+      "Steel",
+      "Flying"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      797
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 570,
+    "description": "Este Ultraente surgió de un Ultraumbral. Parece haber sido avistado surcando los cielos a velocidades vertiginosas.",
+    "stats": {
+      "hp": 97,
+      "atk": 101,
+      "def": 103,
+      "spe": 61
+    }
+  },
+  {
+    "id": 798,
+    "name": "Kartana",
+    "types": [
+      "Grass",
+      "Steel"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      798
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 570,
+    "description": "Este Ultraente surgió de un Ultraumbral. Se dice que no es muy agresivo, pero su afilado cuerpo es un arma realmente peligrosa.",
+    "stats": {
+      "hp": 59,
+      "atk": 181,
+      "def": 131,
+      "spe": 109
+    }
+  },
+  {
+    "id": 799,
+    "name": "Guzzlord",
+    "types": [
+      "Dark",
+      "Dragon"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      799
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 570,
+    "description": "Se dice que este Ultraente ha sido avistado devorando montañas enteras y tragándose prominentes edificios.",
+    "stats": {
+      "hp": 223,
+      "atk": 101,
+      "def": 53,
+      "spe": 43
+    }
+  },
+  {
+    "id": 800,
+    "name": "Necrozma",
+    "types": [
+      "Psychic"
+    ],
+    "ability": "Prism Armor",
+    "evolutionChain": [
+      800
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 600,
+    "description": "Se dice que yacía en el interior de la tierra. Se cree que esta criatura, parecida a un Ultraente, vino de otro mundo hace muchísimo tiempo.",
+    "stats": {
+      "hp": 97,
+      "atk": 107,
+      "def": 101,
+      "spe": 79
+    }
+  },
+  {
+    "id": 801,
+    "name": "Magearna",
+    "types": [
+      "Steel",
+      "Fairy"
+    ],
+    "ability": "Soul Heart",
+    "evolutionChain": [
+      801
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 600,
+    "description": "Pokémon artificial creado hace más de 500 años. Es capaz de entender el lenguaje humano, pero carece de la facultad del habla.",
+    "stats": {
+      "hp": 80,
+      "atk": 95,
+      "def": 115,
+      "spe": 65
+    },
+    "megaId": 10318
+  },
+  {
+    "id": 802,
+    "name": "Marshadow",
+    "types": [
+      "Fighting",
+      "Ghost"
+    ],
+    "ability": "Technician",
+    "evolutionChain": [
+      802
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 600,
+    "description": "Debido a que siempre se ha ocultado en las sombras y no le gusta dejarse ver, su misma existencia es todo un misterio.",
+    "stats": {
+      "hp": 90,
+      "atk": 125,
+      "def": 80,
+      "spe": 125
+    }
+  },
+  {
+    "id": 803,
+    "name": "Poipole",
+    "types": [
+      "Poison"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      803
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 420,
+    "description": "En su mundo, este Ultraente se considera tan entrañable como para ser elegido compañero de viaje.",
+    "stats": {
+      "hp": 67,
+      "atk": 73,
+      "def": 67,
+      "spe": 73
+    }
+  },
+  {
+    "id": 804,
+    "name": "Naganadel",
+    "types": [
+      "Poison",
+      "Dragon"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      804
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 540,
+    "description": "Una de las temibles criaturas conocidas como Ultraentes. En su cuerpo almacena cientos de litros de veneno.",
+    "stats": {
+      "hp": 73,
+      "atk": 73,
+      "def": 73,
+      "spe": 121
+    }
+  },
+  {
+    "id": 805,
+    "name": "Stakataka",
+    "types": [
+      "Rock",
+      "Steel"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      805
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 570,
+    "description": "Surgió de un Ultraumbral. Parece estar compuesto de varias criaturas que se han combinado para formar un solo ser.",
+    "stats": {
+      "hp": 61,
+      "atk": 131,
+      "def": 211,
+      "spe": 13
+    }
+  },
+  {
+    "id": 806,
+    "name": "Blacephalon",
+    "types": [
+      "Fire",
+      "Ghost"
+    ],
+    "ability": "Beast Boost",
+    "evolutionChain": [
+      806
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Ultraente",
+    "baseStatsSum": 570,
+    "description": "Parece ser uno de los temibles Ultraentes. Se acerca a la gente contoneándose y hace explotar su propia cabeza súbitamente.",
+    "stats": {
+      "hp": 53,
+      "atk": 127,
+      "def": 53,
+      "spe": 107
+    }
+  },
+  {
+    "id": 807,
+    "name": "Zeraora",
+    "types": [
+      "Electric"
+    ],
+    "ability": "Volt Absorb",
+    "evolutionChain": [
+      807
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 600,
+    "description": "Hace jirones al oponente con sus garras electrificadas. Aunque este esquive los golpes, acaba electrocutado por las descargas.",
+    "stats": {
+      "hp": 88,
+      "atk": 112,
+      "def": 75,
+      "spe": 143
+    },
+    "megaId": 10319
+  },
+  {
+    "id": 808,
+    "name": "Meltan",
+    "types": [
+      "Steel"
+    ],
+    "ability": "Magnet Pull",
+    "evolutionChain": [
+      808
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 300,
+    "description": "Su cuerpo está compuesto de acero líquido. Funde las partículas de hierro y otros metales del subsuelo para luego absorberlas.",
+    "stats": {
+      "hp": 46,
+      "atk": 65,
+      "def": 65,
+      "spe": 34
+    }
+  },
+  {
+    "id": 809,
+    "name": "Melmetal",
+    "types": [
+      "Steel"
+    ],
+    "ability": "Iron Fist",
+    "evolutionChain": [
+      809
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 600,
+    "description": "En la antigüedad se le veneraba por su poder de crear hierro. Después de tres milenios, ha regresado misteriosamente.",
+    "stats": {
+      "hp": 135,
+      "atk": 143,
+      "def": 143,
+      "spe": 34
+    }
+  },
+  {
+    "id": 810,
+    "name": "Grookey",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Overgrow",
+    "evolutionChain": [
+      810
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 310,
+    "description": "Al marcar el ritmo con su baqueta especial, produce unas ondas sonoras capaces de devolver la vitalidad a la flora.",
+    "stats": {
+      "hp": 50,
+      "atk": 65,
+      "def": 50,
+      "spe": 65
+    }
+  },
+  {
+    "id": 811,
+    "name": "Thwackey",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Overgrow",
+    "evolutionChain": [
+      811
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 420,
+    "description": "Los Thwackey que marcan el ritmo más contundente con sus dos baquetas son los más respetados por sus congéneres.",
+    "stats": {
+      "hp": 70,
+      "atk": 85,
+      "def": 70,
+      "spe": 80
+    }
+  },
+  {
+    "id": 812,
+    "name": "Rillaboom",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Overgrow",
+    "evolutionChain": [
+      812
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "Controla los poderes y las raíces de su singular tocón en combate golpeándolo como si fuera un tambor.",
+    "stats": {
+      "hp": 100,
+      "atk": 125,
+      "def": 90,
+      "spe": 85
+    }
+  },
+  {
+    "id": 813,
+    "name": "Scorbunny",
+    "types": [
+      "Fire"
+    ],
+    "ability": "Blaze",
+    "evolutionChain": [
+      813
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 310,
+    "description": "Se pone a correr para elevar su temperatura corporal y propagar la energía ígnea por todo el cuerpo. Desata así su verdadera fuerza.",
+    "stats": {
+      "hp": 50,
+      "atk": 71,
+      "def": 40,
+      "spe": 69
+    }
+  },
+  {
+    "id": 814,
+    "name": "Raboot",
+    "types": [
+      "Fire"
+    ],
+    "ability": "Blaze",
+    "evolutionChain": [
+      814
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 420,
+    "description": "Su suave pelaje lo protege del frío y le permite incrementar todavía más la temperatura de sus movimientos de tipo Fuego.",
+    "stats": {
+      "hp": 65,
+      "atk": 86,
+      "def": 60,
+      "spe": 94
+    }
+  },
+  {
+    "id": 815,
+    "name": "Cinderace",
+    "types": [
+      "Fire"
+    ],
+    "ability": "Blaze",
+    "evolutionChain": [
+      815
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "Convierte piedras en balones de fuego dándoles toques y, luego, chuta con fuerza hacia el rival para chamuscarlo.",
+    "stats": {
+      "hp": 80,
+      "atk": 116,
+      "def": 75,
+      "spe": 119
+    }
+  },
+  {
+    "id": 816,
+    "name": "Sobble",
+    "types": [
+      "Water"
+    ],
+    "ability": "Torrent",
+    "evolutionChain": [
+      816
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 310,
+    "description": "Cuando se espanta, libera unas lágrimas con un factor lacrimógeno equivalente a 100 cebollas para hacer llorar también al rival.",
+    "stats": {
+      "hp": 50,
+      "atk": 40,
+      "def": 40,
+      "spe": 70
+    }
+  },
+  {
+    "id": 817,
+    "name": "Drizzile",
+    "types": [
+      "Water"
+    ],
+    "ability": "Torrent",
+    "evolutionChain": [
+      817
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 420,
+    "description": "Crea bolas de agua con el líquido que segrega por las palmas de las manos y las usa en combate de forma estratégica.",
+    "stats": {
+      "hp": 65,
+      "atk": 60,
+      "def": 55,
+      "spe": 90
+    }
+  },
+  {
+    "id": 818,
+    "name": "Inteleon",
+    "types": [
+      "Water"
+    ],
+    "ability": "Torrent",
+    "evolutionChain": [
+      818
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "Esconde algunos trucos bajo la manga: puede disparar agua por los dedos o planear con las membranas de su espalda.",
+    "stats": {
+      "hp": 70,
+      "atk": 85,
+      "def": 65,
+      "spe": 120
+    }
+  },
+  {
+    "id": 819,
+    "name": "Skwovet",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Cheek Pouch",
+    "evolutionChain": [
+      819
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 275,
+    "description": "Este Pokémon se encuentra por todo Galar. No se queda tranquilo hasta que tiene ambos carrillos atiborrados de bayas.",
+    "stats": {
+      "hp": 70,
+      "atk": 55,
+      "def": 55,
+      "spe": 25
+    }
+  },
+  {
+    "id": 820,
+    "name": "Greedent",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Cheek Pouch",
+    "evolutionChain": [
+      820
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 460,
+    "description": "Sus incisivos, de fuerza y dureza extraordinarias, le permiten mordisquear incluso las bayas más duras. Es un Pokémon muy común en Galar.",
+    "stats": {
+      "hp": 120,
+      "atk": 95,
+      "def": 95,
+      "spe": 20
+    }
+  },
+  {
+    "id": 821,
+    "name": "Rookidee",
+    "types": [
+      "Flying"
+    ],
+    "ability": "Keen Eye",
+    "evolutionChain": [
+      821
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 245,
+    "description": "De naturaleza valiente, planta cara a cualquier rival, por muy fuerte que sea. Los contraataques que recibe le sirven para fortalecerse.",
+    "stats": {
+      "hp": 38,
+      "atk": 47,
+      "def": 35,
+      "spe": 57
+    }
+  },
+  {
+    "id": 822,
+    "name": "Corvisquire",
+    "types": [
+      "Flying"
+    ],
+    "ability": "Keen Eye",
+    "evolutionChain": [
+      822
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 365,
+    "description": "Su inteligencia le permite servirse de objetos. Por ejemplo, recoge y lanza piedras con las patas, o utiliza cuerdas para atrapar a su oponente.",
+    "stats": {
+      "hp": 68,
+      "atk": 67,
+      "def": 55,
+      "spe": 77
+    }
+  },
+  {
+    "id": 823,
+    "name": "Corviknight",
+    "types": [
+      "Flying",
+      "Steel"
+    ],
+    "ability": "Pressure",
+    "evolutionChain": [
+      823
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 495,
+    "description": "No tiene rival en los cielos de Galar. El acero negro y lustroso de su cuerpo intimida a cualquier adversario.",
+    "stats": {
+      "hp": 98,
+      "atk": 87,
+      "def": 105,
+      "spe": 67
+    }
+  },
+  {
+    "id": 824,
+    "name": "Blipbug",
+    "types": [
+      "Bug"
+    ],
+    "ability": "Swarm",
+    "evolutionChain": [
+      824
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 180,
+    "description": "Siempre está recopilando información, por lo que es muy inteligente, aunque su fuerza deja bastante que desear.",
+    "stats": {
+      "hp": 25,
+      "atk": 20,
+      "def": 20,
+      "spe": 45
+    }
+  },
+  {
+    "id": 825,
+    "name": "Dottler",
+    "types": [
+      "Bug",
+      "Psychic"
+    ],
+    "ability": "Swarm",
+    "evolutionChain": [
+      825
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 335,
+    "description": "Apenas se mueve, pero está vivo. Se cree que adquiere poderes psíquicos mientras permanece recluido en su caparazón sin comer ni beber.",
+    "stats": {
+      "hp": 50,
+      "atk": 35,
+      "def": 80,
+      "spe": 30
+    }
+  },
+  {
+    "id": 826,
+    "name": "Orbeetle",
+    "types": [
+      "Bug",
+      "Psychic"
+    ],
+    "ability": "Swarm",
+    "evolutionChain": [
+      826
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 505,
+    "description": "Este Pokémon es conocido por su inteligencia. El gran tamaño de su cerebro es un indicio de la magnitud de sus poderes psíquicos.",
+    "stats": {
+      "hp": 60,
+      "atk": 45,
+      "def": 110,
+      "spe": 90
+    }
+  },
+  {
+    "id": 827,
+    "name": "Nickit",
+    "types": [
+      "Dark"
+    ],
+    "ability": "Run Away",
+    "evolutionChain": [
+      827
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 245,
+    "description": "Se sustenta con el alimento que roba a otros Pokémon. Las almohadillas de sus patas son tan blandas que no hace ningún ruido al caminar.",
+    "stats": {
+      "hp": 40,
+      "atk": 28,
+      "def": 28,
+      "spe": 50
+    }
+  },
+  {
+    "id": 828,
+    "name": "Thievul",
+    "types": [
+      "Dark"
+    ],
+    "ability": "Run Away",
+    "evolutionChain": [
+      828
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 455,
+    "description": "Marca a su presa sin ser advertido. Sigue el olor y, cuando el otro Pokémon baja la guardia, aprovecha para robarle.",
+    "stats": {
+      "hp": 70,
+      "atk": 58,
+      "def": 58,
+      "spe": 90
+    }
+  },
+  {
+    "id": 829,
+    "name": "Gossifleur",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Cotton Down",
+    "evolutionChain": [
+      829
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 250,
+    "description": "Si planta su única extremidad inferior en la tierra y se expone a abundante luz solar, sus pétalos cobran un color vivo.",
+    "stats": {
+      "hp": 40,
+      "atk": 40,
+      "def": 60,
+      "spe": 10
+    }
+  },
+  {
+    "id": 830,
+    "name": "Eldegoss",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Cotton Down",
+    "evolutionChain": [
+      830
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 460,
+    "description": "Las semillas que tiene entre la pelusa son muy nutritivas. Arrastradas por el viento, devuelven la vitalidad a la flora y a otros Pokémon.",
+    "stats": {
+      "hp": 60,
+      "atk": 50,
+      "def": 90,
+      "spe": 60
+    }
+  },
+  {
+    "id": 831,
+    "name": "Wooloo",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Fluffy",
+    "evolutionChain": [
+      831
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 270,
+    "description": "Su lana rizada es tan acolchada que no se hace daño ni aunque se caiga por un precipicio.",
+    "stats": {
+      "hp": 42,
+      "atk": 40,
+      "def": 55,
+      "spe": 48
+    }
+  },
+  {
+    "id": 832,
+    "name": "Dubwool",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Fluffy",
+    "evolutionChain": [
+      832
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 490,
+    "description": "Su lana es muy flexible. Las alfombras tejidas con ella adoptan una textura similar a la de las camas elásticas.",
+    "stats": {
+      "hp": 72,
+      "atk": 80,
+      "def": 100,
+      "spe": 88
+    }
+  },
+  {
+    "id": 833,
+    "name": "Chewtle",
+    "types": [
+      "Water"
+    ],
+    "ability": "Strong Jaw",
+    "evolutionChain": [
+      833
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 284,
+    "description": "Muerde todo lo que se le ponga por delante. Al parecer, lo hace para aliviar el dolor que siente cuando le crecen los incisivos.",
+    "stats": {
+      "hp": 50,
+      "atk": 64,
+      "def": 50,
+      "spe": 44
+    }
+  },
+  {
+    "id": 834,
+    "name": "Drednaw",
+    "types": [
+      "Water",
+      "Rock"
+    ],
+    "ability": "Strong Jaw",
+    "evolutionChain": [
+      834
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "Un Pokémon de temperamento feroz que atenaza a su presa con sus fuertes mandíbulas, capaces de destrozar una barra de hierro.",
+    "stats": {
+      "hp": 90,
+      "atk": 115,
+      "def": 90,
+      "spe": 74
+    }
+  },
+  {
+    "id": 835,
+    "name": "Yamper",
+    "types": [
+      "Electric"
+    ],
+    "ability": "Ball Fetch",
+    "evolutionChain": [
+      835
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 270,
+    "description": "Al correr, genera electricidad por la base de la cola. Es muy popular entre los pastores de Galar.",
+    "stats": {
+      "hp": 59,
+      "atk": 45,
+      "def": 50,
+      "spe": 26
+    }
+  },
+  {
+    "id": 836,
+    "name": "Boltund",
+    "types": [
+      "Electric"
+    ],
+    "ability": "Strong Jaw",
+    "evolutionChain": [
+      836
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 490,
+    "description": "La electricidad que genera y envía a sus patas le ayuda a desplazarse rápidamente. Puede correr sin descanso durante tres días y tres noches.",
+    "stats": {
+      "hp": 69,
+      "atk": 90,
+      "def": 60,
+      "spe": 121
+    }
+  },
+  {
+    "id": 837,
+    "name": "Rolycoly",
+    "types": [
+      "Rock"
+    ],
+    "ability": "Steam Engine",
+    "evolutionChain": [
+      837
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 240,
+    "description": "Fue descubierto hace aproximadamente 400 años en una mina. Casi la totalidad de su cuerpo presenta una composición igual a la del carbón.",
+    "stats": {
+      "hp": 30,
+      "atk": 40,
+      "def": 50,
+      "spe": 30
+    }
+  },
+  {
+    "id": 838,
+    "name": "Carkol",
+    "types": [
+      "Rock",
+      "Fire"
+    ],
+    "ability": "Steam Engine",
+    "evolutionChain": [
+      838
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 410,
+    "description": "Forma carbón en el interior de su cuerpo. Los antiguos habitantes de Galar lo aprovechaban para sus labores diarias.",
+    "stats": {
+      "hp": 80,
+      "atk": 60,
+      "def": 90,
+      "spe": 50
+    }
+  },
+  {
+    "id": 839,
+    "name": "Coalossal",
+    "types": [
+      "Rock",
+      "Fire"
+    ],
+    "ability": "Steam Engine",
+    "evolutionChain": [
+      839
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 510,
+    "description": "Aunque es de carácter sereno, monta en cólera si ve a seres humanos dañando una mina y reduce todo a cenizas con sus llamas a 1500 °C.",
+    "stats": {
+      "hp": 110,
+      "atk": 80,
+      "def": 120,
+      "spe": 30
+    }
+  },
+  {
+    "id": 840,
+    "name": "Applin",
+    "types": [
+      "Grass",
+      "Dragon"
+    ],
+    "ability": "Ripen",
+    "evolutionChain": [
+      840
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 260,
+    "description": "Habita durante toda su vida en el interior de una manzana. Finge ser una fruta para protegerse de los Pokémon pájaro, sus enemigos naturales.",
+    "stats": {
+      "hp": 40,
+      "atk": 40,
+      "def": 80,
+      "spe": 20
+    }
+  },
+  {
+    "id": 841,
+    "name": "Flapple",
+    "types": [
+      "Grass",
+      "Dragon"
+    ],
+    "ability": "Ripen",
+    "evolutionChain": [
+      841
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "Ha evolucionado tras ingerir una manzana ácida. Las bolsas de las mejillas albergan un fluido cuya extrema acidez llega a provocar quemaduras.",
+    "stats": {
+      "hp": 70,
+      "atk": 110,
+      "def": 80,
+      "spe": 70
+    }
+  },
+  {
+    "id": 842,
+    "name": "Appletun",
+    "types": [
+      "Grass",
+      "Dragon"
+    ],
+    "ability": "Ripen",
+    "evolutionChain": [
+      842
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "Ha evolucionado tras ingerir una manzana dulce. De ahí que el olor que emana para atraer a sus presas, los Pokémon insecto, sea tan agradable.",
+    "stats": {
+      "hp": 110,
+      "atk": 85,
+      "def": 80,
+      "spe": 30
+    }
+  },
+  {
+    "id": 843,
+    "name": "Silicobra",
+    "types": [
+      "Ground"
+    ],
+    "ability": "Sand Spit",
+    "evolutionChain": [
+      843
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 315,
+    "description": "Almacena la arena que ingiere al perforar hoyos en la saca del cuello, cuya capacidad llega a alcanzar incluso los 8 kg.",
+    "stats": {
+      "hp": 52,
+      "atk": 57,
+      "def": 75,
+      "spe": 46
+    }
+  },
+  {
+    "id": 844,
+    "name": "Sandaconda",
+    "types": [
+      "Ground"
+    ],
+    "ability": "Sand Spit",
+    "evolutionChain": [
+      844
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 510,
+    "description": "Se retuerce para expulsar por los orificios nasales hasta 100 kg de arena. La ausencia de esta mina su ánimo.",
+    "stats": {
+      "hp": 72,
+      "atk": 107,
+      "def": 125,
+      "spe": 71
+    }
+  },
+  {
+    "id": 845,
+    "name": "Cramorant",
+    "types": [
+      "Flying",
+      "Water"
+    ],
+    "ability": "Gulp Missile",
+    "evolutionChain": [
+      845
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 475,
+    "description": "Su colosal potencia le permite machacar al rival de un solo golpe, aunque su carácter despistado lo lleva a olvidarse de su presencia.",
+    "stats": {
+      "hp": 70,
+      "atk": 85,
+      "def": 55,
+      "spe": 85
+    }
+  },
+  {
+    "id": 846,
+    "name": "Arrokuda",
+    "types": [
+      "Water"
+    ],
+    "ability": "Swift Swim",
+    "evolutionChain": [
+      846
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 280,
+    "description": "Se siente muy orgulloso de su afilada mandíbula. En cuanto detecta el más mínimo movimiento, va directo al objetivo para cargar contra él.",
+    "stats": {
+      "hp": 41,
+      "atk": 63,
+      "def": 40,
+      "spe": 66
+    }
+  },
+  {
+    "id": 847,
+    "name": "Barraskewda",
+    "types": [
+      "Water"
+    ],
+    "ability": "Swift Swim",
+    "evolutionChain": [
+      847
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 490,
+    "description": "Su mandíbula es tan puntiaguda como una lanza y tan dura como el acero. Al parecer, su carne es sorprendentemente deliciosa.",
+    "stats": {
+      "hp": 61,
+      "atk": 123,
+      "def": 60,
+      "spe": 136
+    }
+  },
+  {
+    "id": 848,
+    "name": "Toxel",
+    "types": [
+      "Electric",
+      "Poison"
+    ],
+    "ability": "Rattled",
+    "evolutionChain": [
+      848
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 242,
+    "description": "Secreta toxinas por la piel y las almacena en una bolsa de veneno interna. Tocarlo da calambre.",
+    "stats": {
+      "hp": 40,
+      "atk": 38,
+      "def": 35,
+      "spe": 40
+    }
+  },
+  {
+    "id": 849,
+    "name": "Toxtricity-amped",
+    "types": [
+      "Electric",
+      "Poison"
+    ],
+    "ability": "Punk Rock",
+    "evolutionChain": [
+      849
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 502,
+    "description": "Cuando rasga las protuberancias del pecho para generar energía eléctrica, emite un sonido similar al de una guitarra, que reverbera en el entorno.",
+    "stats": {
+      "hp": 75,
+      "atk": 98,
+      "def": 70,
+      "spe": 75
+    }
+  },
+  {
+    "id": 850,
+    "name": "Sizzlipede",
+    "types": [
+      "Fire",
+      "Bug"
+    ],
+    "ability": "Flash Fire",
+    "evolutionChain": [
+      850
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 305,
+    "description": "Genera calor consumiendo el gas inflamable que almacena en su cuerpo. Los círculos amarillos del abdomen están particularmente calientes.",
+    "stats": {
+      "hp": 50,
+      "atk": 65,
+      "def": 45,
+      "spe": 45
+    }
+  },
+  {
+    "id": 851,
+    "name": "Centiskorch",
+    "types": [
+      "Fire",
+      "Bug"
+    ],
+    "ability": "Flash Fire",
+    "evolutionChain": [
+      851
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 525,
+    "description": "Cuando genera calor, su temperatura corporal alcanza aproximadamente los 800 °C. Usa el cuerpo a modo de látigo para lanzarse al ataque.",
+    "stats": {
+      "hp": 100,
+      "atk": 115,
+      "def": 65,
+      "spe": 65
+    }
+  },
+  {
+    "id": 852,
+    "name": "Clobbopus",
+    "types": [
+      "Fighting"
+    ],
+    "ability": "Limber",
+    "evolutionChain": [
+      852
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 310,
+    "description": "Emerge a tierra firme en busca de alimento. Su extrema curiosidad lo induce a golpear con los tentáculos todo lo que entra en su campo visual.",
+    "stats": {
+      "hp": 50,
+      "atk": 68,
+      "def": 60,
+      "spe": 32
+    }
+  },
+  {
+    "id": 853,
+    "name": "Grapploct",
+    "types": [
+      "Fighting"
+    ],
+    "ability": "Limber",
+    "evolutionChain": [
+      853
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 480,
+    "description": "Todo su cuerpo es una mole de puro músculo. Utiliza los tentáculos para ejecutar técnicas de estrangulamiento con una formidable potencia.",
+    "stats": {
+      "hp": 80,
+      "atk": 118,
+      "def": 90,
+      "spe": 42
+    }
+  },
+  {
+    "id": 854,
+    "name": "Sinistea",
+    "types": [
+      "Ghost"
+    ],
+    "ability": "Weak Armor",
+    "evolutionChain": [
+      854
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 308,
+    "description": "Según se dice, este Pokémon surgió de un alma solitaria que poseyó una taza abandonada llena de un té ya frío.",
+    "stats": {
+      "hp": 40,
+      "atk": 45,
+      "def": 45,
+      "spe": 50
+    }
+  },
+  {
+    "id": 855,
+    "name": "Polteageist",
+    "types": [
+      "Ghost"
+    ],
+    "ability": "Weak Armor",
+    "evolutionChain": [
+      855
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 508,
+    "description": "Se hospeda en teteras dignas de un anticuario. Las originales son escasísimas, pero existe un gran número de burdas falsificaciones.",
+    "stats": {
+      "hp": 60,
+      "atk": 65,
+      "def": 65,
+      "spe": 70
+    }
+  },
+  {
+    "id": 856,
+    "name": "Hatenna",
+    "types": [
+      "Psychic"
+    ],
+    "ability": "Healer",
+    "evolutionChain": [
+      856
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 265,
+    "description": "Percibe los sentimientos de los seres vivos con la protuberancia de la cabeza. Solo abre su corazón a quienes muestren un carácter sosegado.",
+    "stats": {
+      "hp": 42,
+      "atk": 30,
+      "def": 45,
+      "spe": 39
+    }
+  },
+  {
+    "id": 857,
+    "name": "Hattrem",
+    "types": [
+      "Psychic"
+    ],
+    "ability": "Healer",
+    "evolutionChain": [
+      857
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 370,
+    "description": "Silencia a cualquiera que muestre una emoción intensa sin importar de quién se trate y recurre para ello a métodos a cuál más violento.",
+    "stats": {
+      "hp": 57,
+      "atk": 40,
+      "def": 65,
+      "spe": 49
+    }
+  },
+  {
+    "id": 858,
+    "name": "Hatterene",
+    "types": [
+      "Psychic",
+      "Fairy"
+    ],
+    "ability": "Healer",
+    "evolutionChain": [
+      858
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 510,
+    "description": "Para mantener alejados a los demás seres vivos, emana a su alrededor ondas psíquicas cuya potencia es capaz de provocar jaquecas.",
+    "stats": {
+      "hp": 57,
+      "atk": 90,
+      "def": 95,
+      "spe": 29
+    }
+  },
+  {
+    "id": 859,
+    "name": "Impidimp",
+    "types": [
+      "Dark",
+      "Fairy"
+    ],
+    "ability": "Prankster",
+    "evolutionChain": [
+      859
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 265,
+    "description": "Con el fin de revitalizarse, inhala por la nariz la energía negativa que desprenden tanto personas como Pokémon cuando están descontentos.",
+    "stats": {
+      "hp": 45,
+      "atk": 45,
+      "def": 30,
+      "spe": 50
+    }
+  },
+  {
+    "id": 860,
+    "name": "Morgrem",
+    "types": [
+      "Dark",
+      "Fairy"
+    ],
+    "ability": "Prankster",
+    "evolutionChain": [
+      860
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 370,
+    "description": "Su estrategia consiste en postrarse ante el rival y fingir una disculpa para ensartarlo con el mechón que tiene en la espalda, afilado cual lanza.",
+    "stats": {
+      "hp": 65,
+      "atk": 60,
+      "def": 45,
+      "spe": 70
+    }
+  },
+  {
+    "id": 861,
+    "name": "Grimmsnarl",
+    "types": [
+      "Dark",
+      "Fairy"
+    ],
+    "ability": "Prankster",
+    "evolutionChain": [
+      861
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 510,
+    "description": "Cuando enrolla sus cabellos por todo el cuerpo, aumenta su potencia muscular. Posee una fuerza capaz de someter a Machamp.",
+    "stats": {
+      "hp": 95,
+      "atk": 120,
+      "def": 65,
+      "spe": 60
+    }
+  },
+  {
+    "id": 862,
+    "name": "Obstagoon",
+    "types": [
+      "Dark",
+      "Normal"
+    ],
+    "ability": "Reckless",
+    "evolutionChain": [
+      862
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 520,
+    "description": "La potencia de su voz es realmente pasmosa. La técnica que usa para intimidar al rival mientras grita recibe el nombre de Obstrucción.",
+    "stats": {
+      "hp": 93,
+      "atk": 90,
+      "def": 101,
+      "spe": 95
+    }
+  },
+  {
+    "id": 863,
+    "name": "Perrserker",
+    "types": [
+      "Steel"
+    ],
+    "ability": "Battle Armor",
+    "evolutionChain": [
+      863
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 440,
+    "description": "El pelo de la cabeza se le ha endurecido hasta el punto de parecer un yelmo de hierro. Posee un temperamento muy combativo.",
+    "stats": {
+      "hp": 70,
+      "atk": 110,
+      "def": 100,
+      "spe": 50
+    }
+  },
+  {
+    "id": 864,
+    "name": "Cursola",
+    "types": [
+      "Ghost"
+    ],
+    "ability": "Weak Armor",
+    "evolutionChain": [
+      864
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 510,
+    "description": "Su energía espiritual ha aumentado hasta hacerlo desprenderse de su base caliza. Protege el alma del núcleo con su cuerpo espectral.",
+    "stats": {
+      "hp": 60,
+      "atk": 95,
+      "def": 50,
+      "spe": 30
+    }
+  },
+  {
+    "id": 865,
+    "name": "Sirfetchd",
+    "types": [
+      "Fighting"
+    ],
+    "ability": "Steadfast",
+    "evolutionChain": [
+      865
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 507,
+    "description": "Los ejemplares que superan numerosos combates evolucionan y adoptan esta forma. Abandonan el terreno de combate en cuanto el puerro se seca.",
+    "stats": {
+      "hp": 62,
+      "atk": 135,
+      "def": 95,
+      "spe": 65
+    }
+  },
+  {
+    "id": 866,
+    "name": "Mr-rime",
+    "types": [
+      "Ice",
+      "Psychic"
+    ],
+    "ability": "Tangled Feet",
+    "evolutionChain": [
+      866
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 520,
+    "description": "Es un bailarín consumado de claqué. Agita su bastón de hielo mientras exhibe su destreza con gráciles pasos.",
+    "stats": {
+      "hp": 80,
+      "atk": 85,
+      "def": 75,
+      "spe": 70
+    }
+  },
+  {
+    "id": 867,
+    "name": "Runerigus",
+    "types": [
+      "Ground",
+      "Ghost"
+    ],
+    "ability": "Wandering Spirit",
+    "evolutionChain": [
+      867
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 483,
+    "description": "Una poderosa maldición pesa sobre esta antigua imagen grabada, que ha cobrado vida tras adueñarse del alma de Yamask.",
+    "stats": {
+      "hp": 58,
+      "atk": 95,
+      "def": 145,
+      "spe": 30
+    }
+  },
+  {
+    "id": 868,
+    "name": "Milcery",
+    "types": [
+      "Fairy"
+    ],
+    "ability": "Sweet Veil",
+    "evolutionChain": [
+      868
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 270,
+    "description": "Su cremoso cuerpo surgió a partir de la unión de partículas odoríferas de dulces aromas presentes en el aire.",
+    "stats": {
+      "hp": 45,
+      "atk": 40,
+      "def": 40,
+      "spe": 34
+    }
+  },
+  {
+    "id": 869,
+    "name": "Alcremie",
+    "types": [
+      "Fairy"
+    ],
+    "ability": "Sweet Veil",
+    "evolutionChain": [
+      869
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 495,
+    "description": "Obsequia bayas decoradas con nata a aquellos Entrenadores en los que confía.",
+    "stats": {
+      "hp": 65,
+      "atk": 60,
+      "def": 75,
+      "spe": 64
+    }
+  },
+  {
+    "id": 870,
+    "name": "Falinks",
+    "types": [
+      "Fighting"
+    ],
+    "ability": "Battle Armor",
+    "evolutionChain": [
+      870
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 470,
+    "description": "Este Pokémon consta de cinco subalternos y un líder, cuyas órdenes obedecen sin rechistar.",
+    "stats": {
+      "hp": 65,
+      "atk": 100,
+      "def": 100,
+      "spe": 75
+    },
+    "megaId": 10303
+  },
+  {
+    "id": 871,
+    "name": "Pincurchin",
+    "types": [
+      "Electric"
+    ],
+    "ability": "Lightning Rod",
+    "evolutionChain": [
+      871
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 435,
+    "description": "Libera electricidad por la punta de las púas. Con sus afilados dientes raspa las algas pegadas a las rocas para ingerirlas.",
+    "stats": {
+      "hp": 48,
+      "atk": 101,
+      "def": 95,
+      "spe": 15
+    }
+  },
+  {
+    "id": 872,
+    "name": "Snom",
+    "types": [
+      "Ice",
+      "Bug"
+    ],
+    "ability": "Shield Dust",
+    "evolutionChain": [
+      872
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 185,
+    "description": "Teje un hilo gélido que le permite aferrarse a las ramas y simula ser un carámbano mientras duerme.",
+    "stats": {
+      "hp": 30,
+      "atk": 25,
+      "def": 35,
+      "spe": 20
+    }
+  },
+  {
+    "id": 873,
+    "name": "Frosmoth",
+    "types": [
+      "Ice",
+      "Bug"
+    ],
+    "ability": "Shield Dust",
+    "evolutionChain": [
+      873
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 475,
+    "description": "La temperatura de sus alas es de -180 °C. Sobrevuela el campo esparciendo sus gélidas escamas, como si de nieve se tratase.",
+    "stats": {
+      "hp": 70,
+      "atk": 65,
+      "def": 60,
+      "spe": 65
+    }
+  },
+  {
+    "id": 874,
+    "name": "Stonjourner",
+    "types": [
+      "Rock"
+    ],
+    "ability": "Power Spot",
+    "evolutionChain": [
+      874
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 470,
+    "description": "Pasa el tiempo observando inmóvil el recorrido del sol sobre las extensas praderas que habita. Se especializa en técnicas de ágiles patadas.",
+    "stats": {
+      "hp": 100,
+      "atk": 125,
+      "def": 135,
+      "spe": 70
+    }
+  },
+  {
+    "id": 875,
+    "name": "Eiscue-ice",
+    "types": [
+      "Ice"
+    ],
+    "ability": "Ice Face",
+    "evolutionChain": [
+      875
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 470,
+    "description": "La corriente lo ha transportado hasta aquí desde un lugar sumamente gélido. Utiliza el hielo para mantener la cara refrigerada en todo momento.",
+    "stats": {
+      "hp": 75,
+      "atk": 80,
+      "def": 110,
+      "spe": 50
+    }
+  },
+  {
+    "id": 876,
+    "name": "Indeedee-male",
+    "types": [
+      "Psychic",
+      "Normal"
+    ],
+    "ability": "Inner Focus",
+    "evolutionChain": [
+      876
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 475,
+    "description": "Percibe las emociones del objetivo con los cuernos de la cabeza. Los machos están atentos a cualquier cosa que necesite su Entrenador.",
+    "stats": {
+      "hp": 60,
+      "atk": 65,
+      "def": 55,
+      "spe": 95
+    }
+  },
+  {
+    "id": 877,
+    "name": "Morpeko-full-belly",
+    "types": [
+      "Electric",
+      "Dark"
+    ],
+    "ability": "Hunger Switch",
+    "evolutionChain": [
+      877
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 436,
+    "description": "Siempre tiene hambre. Se nutre de las semillas que guarda en una suerte de bolsillos para generar electricidad.",
+    "stats": {
+      "hp": 58,
+      "atk": 95,
+      "def": 58,
+      "spe": 97
+    }
+  },
+  {
+    "id": 878,
+    "name": "Cufant",
+    "types": [
+      "Steel"
+    ],
+    "ability": "Sheer Force",
+    "evolutionChain": [
+      878
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 330,
+    "description": "Su constitución fornida le permite transportar sin inmutarse cargas de 5 toneladas. Utiliza la trompa para excavar la tierra.",
+    "stats": {
+      "hp": 72,
+      "atk": 80,
+      "def": 49,
+      "spe": 40
+    }
+  },
+  {
+    "id": 879,
+    "name": "Copperajah",
+    "types": [
+      "Steel"
+    ],
+    "ability": "Sheer Force",
+    "evolutionChain": [
+      879
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "Su piel verdosa es resistente al agua. Proviene de tierras lejanas y presta ayuda a las personas en la realización de ciertos trabajos.",
+    "stats": {
+      "hp": 122,
+      "atk": 130,
+      "def": 69,
+      "spe": 30
+    }
+  },
+  {
+    "id": 880,
+    "name": "Dracozolt",
+    "types": [
+      "Electric",
+      "Dragon"
+    ],
+    "ability": "Volt Absorb",
+    "evolutionChain": [
+      880
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 505,
+    "description": "La robustez de su tren inferior lo hacía invencible en la antigüedad, pero se extinguió tras comerse todas las plantas de las que se nutría.",
+    "stats": {
+      "hp": 90,
+      "atk": 100,
+      "def": 90,
+      "spe": 75
+    }
+  },
+  {
+    "id": 881,
+    "name": "Arctozolt",
+    "types": [
+      "Electric",
+      "Ice"
+    ],
+    "ability": "Volt Absorb",
+    "evolutionChain": [
+      881
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 505,
+    "description": "La parte superior del cuerpo está congelada y, al temblar, genera electricidad. Camina con suma dificultad.",
+    "stats": {
+      "hp": 90,
+      "atk": 100,
+      "def": 90,
+      "spe": 55
+    }
+  },
+  {
+    "id": 882,
+    "name": "Dracovish",
+    "types": [
+      "Water",
+      "Dragon"
+    ],
+    "ability": "Water Absorb",
+    "evolutionChain": [
+      882
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 505,
+    "description": "Su excelente capacidad motriz y la fuerza de su mandíbula lo hacían antaño invencible, pero dar caza a todas sus presas propició su extinción.",
+    "stats": {
+      "hp": 90,
+      "atk": 90,
+      "def": 100,
+      "spe": 75
+    }
+  },
+  {
+    "id": 883,
+    "name": "Arctovish",
+    "types": [
+      "Water",
+      "Ice"
+    ],
+    "ability": "Water Absorb",
+    "evolutionChain": [
+      883
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 505,
+    "description": "Atrapa a sus presas congelando su entorno, pero la ubicación de la boca encima de la cabeza le genera dificultades para deglutirlas.",
+    "stats": {
+      "hp": 90,
+      "atk": 90,
+      "def": 100,
+      "spe": 55
+    }
+  },
+  {
+    "id": 884,
+    "name": "Duraludon",
+    "types": [
+      "Steel",
+      "Dragon"
+    ],
+    "ability": "Light Metal",
+    "evolutionChain": [
+      884
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 535,
+    "description": "Su cuerpo, similar a un metal pulido, es tan ligero como robusto. Sin embargo, tiene el defecto de que se oxida con facilidad.",
+    "stats": {
+      "hp": 70,
+      "atk": 95,
+      "def": 115,
+      "spe": 85
+    }
+  },
+  {
+    "id": 885,
+    "name": "Dreepy",
+    "types": [
+      "Dragon",
+      "Ghost"
+    ],
+    "ability": "Clear Body",
+    "evolutionChain": [
+      885
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 270,
+    "description": "Habitaba los mares en tiempos inmemoriales. Ha revivido en forma de Pokémon de tipo Fantasma para vagar por su antigua morada.",
+    "stats": {
+      "hp": 28,
+      "atk": 60,
+      "def": 30,
+      "spe": 82
+    }
+  },
+  {
+    "id": 886,
+    "name": "Drakloak",
+    "types": [
+      "Dragon",
+      "Ghost"
+    ],
+    "ability": "Clear Body",
+    "evolutionChain": [
+      886
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 410,
+    "description": "Vuela a una velocidad de 200 km/h. Lucha junto a un Dreepy, al que cuida hasta el momento de su evolución.",
+    "stats": {
+      "hp": 68,
+      "atk": 80,
+      "def": 50,
+      "spe": 102
+    }
+  },
+  {
+    "id": 887,
+    "name": "Dragapult",
+    "types": [
+      "Dragon",
+      "Ghost"
+    ],
+    "ability": "Clear Body",
+    "evolutionChain": [
+      887
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pseudo-legendario",
+    "baseStatsSum": 600,
+    "description": "Vive en compañía de Dreepy, a los que hospeda en el interior de sus cuernos. Los dispara a velocidad supersónica en combate.",
+    "stats": {
+      "hp": 88,
+      "atk": 120,
+      "def": 75,
+      "spe": 142
+    }
+  },
+  {
+    "id": 888,
+    "name": "Zacian",
+    "types": [
+      "Fairy"
+    ],
+    "ability": "Intrepid Sword",
+    "evolutionChain": [
+      888
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 660,
+    "description": "Este Pokémon está considerado como un héroe de leyenda. Absorbe el metal para transformarlo y emplearlo como armamento.",
+    "stats": {
+      "hp": 92,
+      "atk": 120,
+      "def": 115,
+      "spe": 138
+    }
+  },
+  {
+    "id": 889,
+    "name": "Zamazenta",
+    "types": [
+      "Fighting"
+    ],
+    "ability": "Dauntless Shield",
+    "evolutionChain": [
+      889
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 660,
+    "description": "Este Pokémon se erigió en salvador de Galar, tras unir fuerzas con un rey de los hombres. Absorbe el metal para utilizarlo en combate.",
+    "stats": {
+      "hp": 92,
+      "atk": 120,
+      "def": 115,
+      "spe": 138
+    }
+  },
+  {
+    "id": 890,
+    "name": "Eternatus",
+    "types": [
+      "Poison",
+      "Dragon"
+    ],
+    "ability": "Pressure",
+    "evolutionChain": [
+      890
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 690,
+    "description": "Se alimenta de la energía que brota de la tierra de Galar absorbiéndola por el núcleo del pecho.",
+    "stats": {
+      "hp": 140,
+      "atk": 85,
+      "def": 95,
+      "spe": 130
+    }
+  },
+  {
+    "id": 891,
+    "name": "Kubfu",
+    "types": [
+      "Fighting"
+    ],
+    "ability": "Inner Focus",
+    "evolutionChain": [
+      891
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 385,
+    "description": "Perfecciona su técnica mediante una estricta disciplina. Según la corriente marcial que siga, adoptará una forma u otra al evolucionar.",
+    "stats": {
+      "hp": 60,
+      "atk": 90,
+      "def": 60,
+      "spe": 72
+    }
+  },
+  {
+    "id": 892,
+    "name": "Urshifu-single-strike",
+    "types": [
+      "Fighting",
+      "Dark"
+    ],
+    "ability": "Unseen Fist",
+    "evolutionChain": [
+      892
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 550,
+    "description": "Su estilo de lucha se basa en abatir a sus rivales de un solo golpe. Se abalanza sobre ellos con su puño cincelado por el entrenamiento.",
+    "stats": {
+      "hp": 100,
+      "atk": 130,
+      "def": 100,
+      "spe": 97
+    }
+  },
+  {
+    "id": 893,
+    "name": "Zarude",
+    "types": [
+      "Dark",
+      "Grass"
+    ],
+    "ability": "Leaf Guard",
+    "evolutionChain": [
+      893
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 600,
+    "description": "Viven en manada en la selva. Debido a su marcada agresividad, son muy temidos por otros Pokémon selváticos.",
+    "stats": {
+      "hp": 105,
+      "atk": 120,
+      "def": 105,
+      "spe": 105
+    }
+  },
+  {
+    "id": 894,
+    "name": "Regieleki",
+    "types": [
+      "Electric"
+    ],
+    "ability": "Transistor",
+    "evolutionChain": [
+      894
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 580,
+    "description": "Su cuerpo entero es energía eléctrica. Por lo visto, quitarle los anillos que lleva libera su poder oculto.",
+    "stats": {
+      "hp": 80,
+      "atk": 100,
+      "def": 50,
+      "spe": 200
+    }
+  },
+  {
+    "id": 895,
+    "name": "Regidrago",
+    "types": [
+      "Dragon"
+    ],
+    "ability": "Dragons Maw",
+    "evolutionChain": [
+      895
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 580,
+    "description": "Cierta teoría afirma que la forma de sus brazos representa la cabeza de un Pokémon dragón ancestral, aunque esto no ha podido verificarse.",
+    "stats": {
+      "hp": 200,
+      "atk": 100,
+      "def": 50,
+      "spe": 80
+    }
+  },
+  {
+    "id": 896,
+    "name": "Glastrier",
+    "types": [
+      "Ice"
+    ],
+    "ability": "Chilling Neigh",
+    "evolutionChain": [
+      896
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 580,
+    "description": "Libera un potente vaho gélido por las pezuñas. Un ser violento que no duda en tomar a la fuerza todo cuanto desea.",
+    "stats": {
+      "hp": 100,
+      "atk": 145,
+      "def": 130,
+      "spe": 30
+    }
+  },
+  {
+    "id": 897,
+    "name": "Spectrier",
+    "types": [
+      "Ghost"
+    ],
+    "ability": "Grim Neigh",
+    "evolutionChain": [
+      897
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 580,
+    "description": "Examina su entorno con todos los sentidos, salvo la vista. Se dice que sus coces son capaces de robarle el alma a quien las recibe.",
+    "stats": {
+      "hp": 100,
+      "atk": 65,
+      "def": 60,
+      "spe": 130
+    }
+  },
+  {
+    "id": 898,
+    "name": "Calyrex",
+    "types": [
+      "Psychic",
+      "Grass"
+    ],
+    "ability": "Unnerve",
+    "evolutionChain": [
+      898
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 500,
+    "description": "Un Pokémon muy compasivo agraciado con el poder de la curación. Reinó en Galar en tiempos remotos.",
+    "stats": {
+      "hp": 100,
+      "atk": 80,
+      "def": 80,
+      "spe": 80
+    }
+  },
+  {
+    "id": 899,
+    "name": "Wyrdeer",
+    "types": [
+      "Normal",
+      "Psychic"
+    ],
+    "ability": "Intimidate",
+    "evolutionChain": [
+      899
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 525,
+    "description": "The black orbs shine with an uncanny light when the Pokémon is erecting invisible barriers. The fur shed from its beard retains heat well and is a highly useful material for winter clothing.",
+    "stats": {
+      "hp": 103,
+      "atk": 105,
+      "def": 72,
+      "spe": 65
+    }
+  },
+  {
+    "id": 900,
+    "name": "Kleavor",
+    "types": [
+      "Bug",
+      "Rock"
+    ],
+    "ability": "Swarm",
+    "evolutionChain": [
+      900
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "A violent creature that fells towering trees with its crude axes and shields itself with hard stone. If one should chance upon this Pokémon in the wilds, one's only recourse is to flee.",
+    "stats": {
+      "hp": 70,
+      "atk": 135,
+      "def": 95,
+      "spe": 85
+    }
+  },
+  {
+    "id": 901,
+    "name": "Ursaluna",
+    "types": [
+      "Ground",
+      "Normal"
+    ],
+    "ability": "Guts",
+    "evolutionChain": [
+      901
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 550,
+    "description": "I believe it was Hisui's swampy terrain that gave Ursaluna its burly physique and newfound capacity to manipulate peat at will.",
+    "stats": {
+      "hp": 130,
+      "atk": 140,
+      "def": 105,
+      "spe": 50
+    }
+  },
+  {
+    "id": 902,
+    "name": "Basculegion-male",
+    "types": [
+      "Water",
+      "Ghost"
+    ],
+    "ability": "Swift Swim",
+    "evolutionChain": [
+      902
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "Clads itself in the souls of comrades that perished before fulfilling their goals of journeying upstream. No other species throughout all Hisui's rivers is Basculegion's equal.",
+    "stats": {
+      "hp": 120,
+      "atk": 112,
+      "def": 65,
+      "spe": 78
+    }
+  },
+  {
+    "id": 903,
+    "name": "Sneasler",
+    "types": [
+      "Fighting",
+      "Poison"
+    ],
+    "ability": "Pressure",
+    "evolutionChain": [
+      903
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 510,
+    "description": "Because of Sneasler's virulent poison and daunting physical prowess, no other species could hope to best it on the frozen highlands. Preferring solitude, this species does not form packs.",
+    "stats": {
+      "hp": 80,
+      "atk": 130,
+      "def": 60,
+      "spe": 120
+    }
+  },
+  {
+    "id": 904,
+    "name": "Overqwil",
+    "types": [
+      "Dark",
+      "Poison"
+    ],
+    "ability": "Poison Point",
+    "evolutionChain": [
+      904
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 510,
+    "description": "Its lancelike spikes and savage temperament have earned it the nickname ”sea fiend.” It slurps up poison to nourish itself.",
+    "stats": {
+      "hp": 85,
+      "atk": 115,
+      "def": 95,
+      "spe": 85
+    }
+  },
+  {
+    "id": 905,
+    "name": "Enamorus-incarnate",
+    "types": [
+      "Fairy",
+      "Flying"
+    ],
+    "ability": "Cute Charm",
+    "evolutionChain": [
+      905
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 580,
+    "description": "When it flies to this land from across the sea, the bitter winter comes to an end. According to legend, this Pokémon's love gives rise to the budding of fresh life across Hisui.",
+    "stats": {
+      "hp": 74,
+      "atk": 115,
+      "def": 70,
+      "spe": 106
+    }
+  },
+  {
+    "id": 906,
+    "name": "Sprigatito",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Overgrow",
+    "evolutionChain": [
+      906
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 310,
+    "description": "Its fluffy fur is similar in composition to plants. This Pokémon frequently washes its face to keep it from drying out.",
+    "stats": {
+      "hp": 40,
+      "atk": 61,
+      "def": 54,
+      "spe": 65
+    }
+  },
+  {
+    "id": 907,
+    "name": "Floragato",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Overgrow",
+    "evolutionChain": [
+      907
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 410,
+    "description": "Floragato deftly wields the vine hidden beneath its long fur, slamming the hard flower bud against its opponents.",
+    "stats": {
+      "hp": 61,
+      "atk": 80,
+      "def": 63,
+      "spe": 83
+    }
+  },
+  {
+    "id": 908,
+    "name": "Meowscarada",
+    "types": [
+      "Grass",
+      "Dark"
+    ],
+    "ability": "Overgrow",
+    "evolutionChain": [
+      908
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "This Pokémon uses the reflective fur lining its cape to camouflage the stem of its flower, creating the illusion that the flower is floating.",
+    "stats": {
+      "hp": 76,
+      "atk": 110,
+      "def": 70,
+      "spe": 123
+    }
+  },
+  {
+    "id": 909,
+    "name": "Fuecoco",
+    "types": [
+      "Fire"
+    ],
+    "ability": "Blaze",
+    "evolutionChain": [
+      909
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 310,
+    "description": "It lies on warm rocks and uses the heat absorbed by its square-shaped scales to create fire energy.",
+    "stats": {
+      "hp": 67,
+      "atk": 45,
+      "def": 59,
+      "spe": 36
+    }
+  },
+  {
+    "id": 910,
+    "name": "Crocalor",
+    "types": [
+      "Fire"
+    ],
+    "ability": "Blaze",
+    "evolutionChain": [
+      910
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 411,
+    "description": "The combination of Crocalor’s fire energy and overflowing vitality has caused an egg-shaped fireball to appear on the Pokémon’s head.",
+    "stats": {
+      "hp": 81,
+      "atk": 55,
+      "def": 78,
+      "spe": 49
+    }
+  },
+  {
+    "id": 911,
+    "name": "Skeledirge",
+    "types": [
+      "Fire",
+      "Ghost"
+    ],
+    "ability": "Blaze",
+    "evolutionChain": [
+      911
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "The fiery bird changes shape when Skeledirge sings. Rumor has it that the bird was born when the fireball on Skeledirge’s head gained a soul.",
+    "stats": {
+      "hp": 104,
+      "atk": 75,
+      "def": 100,
+      "spe": 66
+    }
+  },
+  {
+    "id": 912,
+    "name": "Quaxly",
+    "types": [
+      "Water"
+    ],
+    "ability": "Torrent",
+    "evolutionChain": [
+      912
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 310,
+    "description": "This Pokémon migrated to Paldea from distant lands long ago. The gel secreted by its feathers repels water and grime.\"",
+    "stats": {
+      "hp": 55,
+      "atk": 65,
+      "def": 45,
+      "spe": 50
+    }
+  },
+  {
+    "id": 913,
+    "name": "Quaxwell",
+    "types": [
+      "Water"
+    ],
+    "ability": "Torrent",
+    "evolutionChain": [
+      913
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 410,
+    "description": "These Pokémon constantly run through shallow waters to train their legs, then compete with each other to see which of them kicks most gracefully.",
+    "stats": {
+      "hp": 70,
+      "atk": 85,
+      "def": 65,
+      "spe": 65
+    }
+  },
+  {
+    "id": 914,
+    "name": "Quaquaval",
+    "types": [
+      "Water",
+      "Fighting"
+    ],
+    "ability": "Torrent",
+    "evolutionChain": [
+      914
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "A single kick from a Quaquaval can send a truck rolling. This Pokémon uses its powerful legs to perform striking dances from far-off lands.",
+    "stats": {
+      "hp": 85,
+      "atk": 120,
+      "def": 80,
+      "spe": 85
+    }
+  },
+  {
+    "id": 915,
+    "name": "Lechonk",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Aroma Veil",
+    "evolutionChain": [
+      915
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 254,
+    "description": "It searches for food all day. It possesses a keen sense of smell but doesn’t use it for anything other than foraging.",
+    "stats": {
+      "hp": 54,
+      "atk": 45,
+      "def": 40,
+      "spe": 35
+    }
+  },
+  {
+    "id": 916,
+    "name": "Oinkologne-male",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Lingering Aroma",
+    "evolutionChain": [
+      916
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 489,
+    "description": "Oinkologne is proud of its fine, glossy skin. It emits a concentrated scent from the tip of its tail.",
+    "stats": {
+      "hp": 110,
+      "atk": 100,
+      "def": 75,
+      "spe": 65
+    }
+  },
+  {
+    "id": 917,
+    "name": "Tarountula",
+    "types": [
+      "Bug"
+    ],
+    "ability": "Insomnia",
+    "evolutionChain": [
+      917
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 210,
+    "description": "The ball of threads wrapped around its body is elastic enough to deflect the scythes of Scyther, this Pokémon’s natural enemy.",
+    "stats": {
+      "hp": 35,
+      "atk": 41,
+      "def": 45,
+      "spe": 20
+    }
+  },
+  {
+    "id": 918,
+    "name": "Spidops",
+    "types": [
+      "Bug"
+    ],
+    "ability": "Insomnia",
+    "evolutionChain": [
+      918
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 404,
+    "description": "It clings to branches and ceilings using its threads and moves without a sound. It takes out its prey before the prey even notices it.",
+    "stats": {
+      "hp": 60,
+      "atk": 79,
+      "def": 92,
+      "spe": 35
+    }
+  },
+  {
+    "id": 919,
+    "name": "Nymble",
+    "types": [
+      "Bug"
+    ],
+    "ability": "Swarm",
+    "evolutionChain": [
+      919
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 210,
+    "description": "It has its third set of legs folded up. When it’s in a tough spot, this Pokémon jumps over 30 feet using the strength of its legs.",
+    "stats": {
+      "hp": 33,
+      "atk": 46,
+      "def": 40,
+      "spe": 45
+    }
+  },
+  {
+    "id": 920,
+    "name": "Lokix",
+    "types": [
+      "Bug",
+      "Dark"
+    ],
+    "ability": "Swarm",
+    "evolutionChain": [
+      920
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 450,
+    "description": "When it decides to fight all out, it stands on its previously folded legs to enter Showdown Mode. It neutralizes its enemies in short order.",
+    "stats": {
+      "hp": 71,
+      "atk": 102,
+      "def": 78,
+      "spe": 92
+    }
+  },
+  {
+    "id": 921,
+    "name": "Pawmi",
+    "types": [
+      "Electric"
+    ],
+    "ability": "Static",
+    "evolutionChain": [
+      921
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 240,
+    "description": "It has underdeveloped electric sacs on its cheeks. These sacs can produce electricity only if Pawmi rubs them furiously with the pads on its forepaws.",
+    "stats": {
+      "hp": 45,
+      "atk": 50,
+      "def": 20,
+      "spe": 60
+    }
+  },
+  {
+    "id": 922,
+    "name": "Pawmo",
+    "types": [
+      "Electric",
+      "Fighting"
+    ],
+    "ability": "Volt Absorb",
+    "evolutionChain": [
+      922
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 350,
+    "description": "When its group is attacked, Pawmo is the first to leap into battle, defeating enemies with a fighting technique that utilizes electric shocks.",
+    "stats": {
+      "hp": 60,
+      "atk": 75,
+      "def": 40,
+      "spe": 85
+    }
+  },
+  {
+    "id": 923,
+    "name": "Pawmot",
+    "types": [
+      "Electric",
+      "Fighting"
+    ],
+    "ability": "Volt Absorb",
+    "evolutionChain": [
+      923
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 490,
+    "description": "This Pokémon normally is slow to react, but once it enters battle, it will strike down its enemies with lightning-fast movements.",
+    "stats": {
+      "hp": 70,
+      "atk": 115,
+      "def": 70,
+      "spe": 105
+    }
+  },
+  {
+    "id": 924,
+    "name": "Tandemaus",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Run Away",
+    "evolutionChain": [
+      924
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 305,
+    "description": "Exhibiting great teamwork, they use their incisors to cut pieces out of any material that might be useful for a nest, then make off with them.",
+    "stats": {
+      "hp": 50,
+      "atk": 50,
+      "def": 45,
+      "spe": 75
+    }
+  },
+  {
+    "id": 925,
+    "name": "Maushold-family-of-four",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Friend Guard",
+    "evolutionChain": [
+      925
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 470,
+    "description": "The two little ones just appeared one day. The group might be a family of related Pokémon, but nobody knows for sure.",
+    "stats": {
+      "hp": 74,
+      "atk": 75,
+      "def": 70,
+      "spe": 111
+    }
+  },
+  {
+    "id": 926,
+    "name": "Fidough",
+    "types": [
+      "Fairy"
+    ],
+    "ability": "Own Tempo",
+    "evolutionChain": [
+      926
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 312,
+    "description": "This Pokémon is smooth and moist to the touch. Yeast in Fidough’s breath induces fermentation in the Pokémon’s vicinity.",
+    "stats": {
+      "hp": 37,
+      "atk": 55,
+      "def": 70,
+      "spe": 65
+    }
+  },
+  {
+    "id": 927,
+    "name": "Dachsbun",
+    "types": [
+      "Fairy"
+    ],
+    "ability": "Well Baked Body",
+    "evolutionChain": [
+      927
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 477,
+    "description": "The pleasant aroma that emanates from this Pokémon’s body helps wheat grow, so Dachsbun has been treasured by farming villages.",
+    "stats": {
+      "hp": 57,
+      "atk": 80,
+      "def": 115,
+      "spe": 95
+    }
+  },
+  {
+    "id": 928,
+    "name": "Smoliv",
+    "types": [
+      "Grass",
+      "Normal"
+    ],
+    "ability": "Early Bird",
+    "evolutionChain": [
+      928
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 260,
+    "description": "It protects itself from enemies by emitting oil from the fruit on its head. This oil is bitter and astringent enough to make someone flinch.",
+    "stats": {
+      "hp": 41,
+      "atk": 35,
+      "def": 45,
+      "spe": 30
+    }
+  },
+  {
+    "id": 929,
+    "name": "Dolliv",
+    "types": [
+      "Grass",
+      "Normal"
+    ],
+    "ability": "Early Bird",
+    "evolutionChain": [
+      929
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 354,
+    "description": "Dolliv shares its tasty, fresh-scented oil with others. This species has coexisted with humans since times long gone.",
+    "stats": {
+      "hp": 52,
+      "atk": 53,
+      "def": 60,
+      "spe": 33
+    }
+  },
+  {
+    "id": 930,
+    "name": "Arboliva",
+    "types": [
+      "Grass",
+      "Normal"
+    ],
+    "ability": "Seed Sower",
+    "evolutionChain": [
+      930
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 510,
+    "description": "This calm Pokémon is very compassionate. It will share its delicious, nutrient-rich oil with weakened Pokémon.",
+    "stats": {
+      "hp": 78,
+      "atk": 69,
+      "def": 90,
+      "spe": 39
+    }
+  },
+  {
+    "id": 931,
+    "name": "Squawkabilly-green-plumage",
+    "types": [
+      "Normal",
+      "Flying"
+    ],
+    "ability": "Intimidate",
+    "evolutionChain": [
+      931
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 417,
+    "description": "These Pokémon prefer to live in cities. They form flocks based on the color of their feathers, and they fight over territory.",
+    "stats": {
+      "hp": 82,
+      "atk": 96,
+      "def": 51,
+      "spe": 92
+    }
+  },
+  {
+    "id": 932,
+    "name": "Nacli",
+    "types": [
+      "Rock"
+    ],
+    "ability": "Purifying Salt",
+    "evolutionChain": [
+      932
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 280,
+    "description": "It was born in a layer of rock salt deep under the earth. This species was particularly treasured in the old days, as they would share precious salt.",
+    "stats": {
+      "hp": 55,
+      "atk": 55,
+      "def": 75,
+      "spe": 25
+    }
+  },
+  {
+    "id": 933,
+    "name": "Naclstack",
+    "types": [
+      "Rock"
+    ],
+    "ability": "Purifying Salt",
+    "evolutionChain": [
+      933
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 355,
+    "description": "This Pokémon dry cures its prey by spraying salt over them. The curing process steals away the water in the prey’s body.",
+    "stats": {
+      "hp": 60,
+      "atk": 60,
+      "def": 100,
+      "spe": 35
+    }
+  },
+  {
+    "id": 934,
+    "name": "Garganacl",
+    "types": [
+      "Rock"
+    ],
+    "ability": "Purifying Salt",
+    "evolutionChain": [
+      934
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "Garganacl will rub its fingertips together and sprinkle injured Pokémon with salt. Even severe wounds will promptly heal afterward.",
+    "stats": {
+      "hp": 100,
+      "atk": 100,
+      "def": 130,
+      "spe": 35
+    }
+  },
+  {
+    "id": 935,
+    "name": "Charcadet",
+    "types": [
+      "Fire"
+    ],
+    "ability": "Flash Fire",
+    "evolutionChain": [
+      935
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 255,
+    "description": "Burnt charcoal came to life and became a Pokémon. Possessing a fiery fighting spirit, Charcadet will battle even tough opponents.",
+    "stats": {
+      "hp": 40,
+      "atk": 50,
+      "def": 40,
+      "spe": 35
+    }
+  },
+  {
+    "id": 936,
+    "name": "Armarouge",
+    "types": [
+      "Fire",
+      "Psychic"
+    ],
+    "ability": "Flash Fire",
+    "evolutionChain": [
+      936
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 525,
+    "description": "Armarouge evolved through the use of a set of armor that belonged to a distinguished warrior. This Pokémon is incredibly loyal.",
+    "stats": {
+      "hp": 85,
+      "atk": 60,
+      "def": 100,
+      "spe": 75
+    }
+  },
+  {
+    "id": 937,
+    "name": "Ceruledge",
+    "types": [
+      "Fire",
+      "Ghost"
+    ],
+    "ability": "Flash Fire",
+    "evolutionChain": [
+      937
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 525,
+    "description": "The fiery blades on its arms burn fiercely with the lingering resentment of a sword wielder who fell before accomplishing their goal.",
+    "stats": {
+      "hp": 75,
+      "atk": 125,
+      "def": 80,
+      "spe": 85
+    }
+  },
+  {
+    "id": 938,
+    "name": "Tadbulb",
+    "types": [
+      "Electric"
+    ],
+    "ability": "Own Tempo",
+    "evolutionChain": [
+      938
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 272,
+    "description": "Tadbulb shakes its tail to generate electricity. If it senses danger, it will make its head blink on and off to alert its allies.",
+    "stats": {
+      "hp": 61,
+      "atk": 31,
+      "def": 41,
+      "spe": 45
+    }
+  },
+  {
+    "id": 939,
+    "name": "Bellibolt",
+    "types": [
+      "Electric"
+    ],
+    "ability": "Electromorphosis",
+    "evolutionChain": [
+      939
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 495,
+    "description": "When this Pokémon expands and contracts its wobbly body, the belly-button dynamo in its stomach produces a huge amount of electricity.",
+    "stats": {
+      "hp": 109,
+      "atk": 64,
+      "def": 91,
+      "spe": 45
+    }
+  },
+  {
+    "id": 940,
+    "name": "Wattrel",
+    "types": [
+      "Electric",
+      "Flying"
+    ],
+    "ability": "Wind Power",
+    "evolutionChain": [
+      940
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 280,
+    "description": "When its wings catch the wind, the bones within produce electricity. This Pokémon dives into the ocean, catching prey by electrocuting them.",
+    "stats": {
+      "hp": 40,
+      "atk": 40,
+      "def": 35,
+      "spe": 70
+    }
+  },
+  {
+    "id": 941,
+    "name": "Kilowattrel",
+    "types": [
+      "Electric",
+      "Flying"
+    ],
+    "ability": "Wind Power",
+    "evolutionChain": [
+      941
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 490,
+    "description": "Kilowattrel inflates its throat sac to amplify its electricity. By riding the wind, this Pokémon can fly over 430 miles in a day.",
+    "stats": {
+      "hp": 70,
+      "atk": 70,
+      "def": 60,
+      "spe": 125
+    }
+  },
+  {
+    "id": 942,
+    "name": "Maschiff",
+    "types": [
+      "Dark"
+    ],
+    "ability": "Intimidate",
+    "evolutionChain": [
+      942
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 340,
+    "description": "It always scowls in an attempt to make opponents take it seriously, but even crying children will burst into laughter when they see Maschiff’s face.",
+    "stats": {
+      "hp": 60,
+      "atk": 78,
+      "def": 60,
+      "spe": 51
+    }
+  },
+  {
+    "id": 943,
+    "name": "Mabosstiff",
+    "types": [
+      "Dark"
+    ],
+    "ability": "Intimidate",
+    "evolutionChain": [
+      943
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 505,
+    "description": "This Pokémon can store energy in its large dewlap. Mabosstiff unleashes this energy all at once to blow away enemies.",
+    "stats": {
+      "hp": 80,
+      "atk": 120,
+      "def": 90,
+      "spe": 85
+    }
+  },
+  {
+    "id": 944,
+    "name": "Shroodle",
+    "types": [
+      "Poison",
+      "Normal"
+    ],
+    "ability": "Unburden",
+    "evolutionChain": [
+      944
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 290,
+    "description": "Though usually a mellow Pokémon, it will sink its sharp, poison-soaked front teeth into any that anger it, causing paralysis in the object of its ire.",
+    "stats": {
+      "hp": 40,
+      "atk": 65,
+      "def": 35,
+      "spe": 75
+    }
+  },
+  {
+    "id": 945,
+    "name": "Grafaiai",
+    "types": [
+      "Poison",
+      "Normal"
+    ],
+    "ability": "Unburden",
+    "evolutionChain": [
+      945
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "The color of the poisonous saliva depends on what the Pokémon eats. Grafaiai covers its fingers in its saliva and draws patterns on trees in forests.",
+    "stats": {
+      "hp": 63,
+      "atk": 95,
+      "def": 65,
+      "spe": 110
+    }
+  },
+  {
+    "id": 946,
+    "name": "Bramblin",
+    "types": [
+      "Grass",
+      "Ghost"
+    ],
+    "ability": "Wind Rider",
+    "evolutionChain": [
+      946
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 275,
+    "description": "A soul unable to move on to the afterlife was blown around by the wind until it got tangled up with dried grass and became a Pokémon.",
+    "stats": {
+      "hp": 40,
+      "atk": 65,
+      "def": 30,
+      "spe": 60
+    }
+  },
+  {
+    "id": 947,
+    "name": "Brambleghast",
+    "types": [
+      "Grass",
+      "Ghost"
+    ],
+    "ability": "Wind Rider",
+    "evolutionChain": [
+      947
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 480,
+    "description": "It will open the branches of its head to envelop its prey. Once it absorbs all the life energy it needs, it expels the prey and discards it.",
+    "stats": {
+      "hp": 55,
+      "atk": 115,
+      "def": 70,
+      "spe": 90
+    }
+  },
+  {
+    "id": 948,
+    "name": "Toedscool",
+    "types": [
+      "Ground",
+      "Grass"
+    ],
+    "ability": "Mycelium Might",
+    "evolutionChain": [
+      948
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 335,
+    "description": "Toedscool lives in muggy forests. The flaps that fall from its body are chewy and very delicious.",
+    "stats": {
+      "hp": 40,
+      "atk": 40,
+      "def": 35,
+      "spe": 70
+    }
+  },
+  {
+    "id": 949,
+    "name": "Toedscruel",
+    "types": [
+      "Ground",
+      "Grass"
+    ],
+    "ability": "Mycelium Might",
+    "evolutionChain": [
+      949
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 515,
+    "description": "These Pokémon gather into groups and form colonies deep within forests. They absolutely hate it when strangers approach.",
+    "stats": {
+      "hp": 80,
+      "atk": 70,
+      "def": 65,
+      "spe": 100
+    }
+  },
+  {
+    "id": 950,
+    "name": "Klawf",
+    "types": [
+      "Rock"
+    ],
+    "ability": "Anger Shell",
+    "evolutionChain": [
+      950
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 450,
+    "description": "Klawf hangs upside-down from cliffs, waiting for prey. But Klawf can’t remain in this position for long because its blood rushes to its head.",
+    "stats": {
+      "hp": 70,
+      "atk": 100,
+      "def": 115,
+      "spe": 75
+    }
+  },
+  {
+    "id": 951,
+    "name": "Capsakid",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Chlorophyll",
+    "evolutionChain": [
+      951
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 304,
+    "description": "The more sunlight this Pokémon bathes in, the more spicy chemicals are produced by its body, and thus the spicier its moves become.",
+    "stats": {
+      "hp": 50,
+      "atk": 62,
+      "def": 40,
+      "spe": 50
+    }
+  },
+  {
+    "id": 952,
+    "name": "Scovillain",
+    "types": [
+      "Grass",
+      "Fire"
+    ],
+    "ability": "Chlorophyll",
+    "evolutionChain": [
+      952
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 486,
+    "description": "The red head converts spicy chemicals into fire energy and blasts the surrounding area with a super spicy stream of flame.",
+    "stats": {
+      "hp": 65,
+      "atk": 108,
+      "def": 65,
+      "spe": 75
+    },
+    "megaId": 10320
+  },
+  {
+    "id": 953,
+    "name": "Rellor",
+    "types": [
+      "Bug"
+    ],
+    "ability": "Compound Eyes",
+    "evolutionChain": [
+      953
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 270,
+    "description": "This Pokémon creates a mud ball by mixing sand and dirt with psychic energy. It treasures its mud ball more than its own life.",
+    "stats": {
+      "hp": 41,
+      "atk": 50,
+      "def": 60,
+      "spe": 30
+    }
+  },
+  {
+    "id": 954,
+    "name": "Rabsca",
+    "types": [
+      "Bug",
+      "Psychic"
+    ],
+    "ability": "Synchronize",
+    "evolutionChain": [
+      954
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 470,
+    "description": "The body that supports the ball barely moves. Therefore, it is thought that the true body of this Pokémon is actually inside the ball.",
+    "stats": {
+      "hp": 75,
+      "atk": 50,
+      "def": 85,
+      "spe": 45
+    }
+  },
+  {
+    "id": 955,
+    "name": "Flittle",
+    "types": [
+      "Psychic"
+    ],
+    "ability": "Anticipation",
+    "evolutionChain": [
+      955
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 255,
+    "description": "Flittle’s toes levitate about half an inch above the ground because of the psychic power emitted from the frills on the Pokémon’s belly.",
+    "stats": {
+      "hp": 30,
+      "atk": 35,
+      "def": 30,
+      "spe": 75
+    }
+  },
+  {
+    "id": 956,
+    "name": "Espathra",
+    "types": [
+      "Psychic"
+    ],
+    "ability": "Opportunist",
+    "evolutionChain": [
+      956
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 481,
+    "description": "It immobilizes opponents by bathing them in psychic power from its large eyes. Despite its appearance, it has a vicious temperament.",
+    "stats": {
+      "hp": 95,
+      "atk": 60,
+      "def": 60,
+      "spe": 105
+    }
+  },
+  {
+    "id": 957,
+    "name": "Tinkatink",
+    "types": [
+      "Fairy",
+      "Steel"
+    ],
+    "ability": "Mold Breaker",
+    "evolutionChain": [
+      957
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 297,
+    "description": "It swings its handmade hammer around to protect itself, but the hammer is often stolen by Pokémon that eat metal.",
+    "stats": {
+      "hp": 50,
+      "atk": 45,
+      "def": 45,
+      "spe": 58
+    }
+  },
+  {
+    "id": 958,
+    "name": "Tinkatuff",
+    "types": [
+      "Fairy",
+      "Steel"
+    ],
+    "ability": "Mold Breaker",
+    "evolutionChain": [
+      958
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 380,
+    "description": "This Pokémon will attack groups of Pawniard and Bisharp, gathering metal from them in order to create a large and sturdy hammer.",
+    "stats": {
+      "hp": 65,
+      "atk": 55,
+      "def": 55,
+      "spe": 78
+    }
+  },
+  {
+    "id": 959,
+    "name": "Tinkaton",
+    "types": [
+      "Fairy",
+      "Steel"
+    ],
+    "ability": "Mold Breaker",
+    "evolutionChain": [
+      959
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 506,
+    "description": "This intelligent Pokémon has a very daring disposition. It knocks rocks into the sky with its hammer, aiming for flying Corviknight.",
+    "stats": {
+      "hp": 85,
+      "atk": 75,
+      "def": 77,
+      "spe": 94
+    }
+  },
+  {
+    "id": 960,
+    "name": "Wiglett",
+    "types": [
+      "Water"
+    ],
+    "ability": "Gooey",
+    "evolutionChain": [
+      960
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 245,
+    "description": "This Pokémon can pick up the scent of a Veluza just over 65 feet away and will hide itself in the sand.",
+    "stats": {
+      "hp": 10,
+      "atk": 55,
+      "def": 25,
+      "spe": 95
+    }
+  },
+  {
+    "id": 961,
+    "name": "Wugtrio",
+    "types": [
+      "Water"
+    ],
+    "ability": "Gooey",
+    "evolutionChain": [
+      961
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 425,
+    "description": "It has a vicious temperament, contrary to what its appearance may suggest. It wraps its long bodies around prey, then drags the prey into its den.",
+    "stats": {
+      "hp": 35,
+      "atk": 100,
+      "def": 50,
+      "spe": 120
+    }
+  },
+  {
+    "id": 962,
+    "name": "Bombirdier",
+    "types": [
+      "Flying",
+      "Dark"
+    ],
+    "ability": "Big Pecks",
+    "evolutionChain": [
+      962
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "It gathers things up in an apron made from shed feathers added to the Pokémon’s chest feathers, then drops those things from high places for fun.",
+    "stats": {
+      "hp": 70,
+      "atk": 103,
+      "def": 85,
+      "spe": 82
+    }
+  },
+  {
+    "id": 963,
+    "name": "Finizen",
+    "types": [
+      "Water"
+    ],
+    "ability": "Water Veil",
+    "evolutionChain": [
+      963
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 315,
+    "description": "It likes playing with others of its kind using the water ring on its tail. It uses ultrasonic waves to sense the emotions of other living creatures.",
+    "stats": {
+      "hp": 70,
+      "atk": 45,
+      "def": 40,
+      "spe": 75
+    }
+  },
+  {
+    "id": 964,
+    "name": "Palafin-zero",
+    "types": [
+      "Water"
+    ],
+    "ability": "Zero To Hero",
+    "evolutionChain": [
+      964
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 457,
+    "description": "This Pokémon changes its appearance if it hears its allies calling for help. Palafin will never show anybody its moment of transformation.",
+    "stats": {
+      "hp": 100,
+      "atk": 70,
+      "def": 72,
+      "spe": 100
+    }
+  },
+  {
+    "id": 965,
+    "name": "Varoom",
+    "types": [
+      "Steel",
+      "Poison"
+    ],
+    "ability": "Overcoat",
+    "evolutionChain": [
+      965
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 300,
+    "description": "It is said that this Pokémon was born when an unknown poison Pokémon entered and inspirited an engine left at a scrap-processing factory.",
+    "stats": {
+      "hp": 45,
+      "atk": 70,
+      "def": 63,
+      "spe": 47
+    }
+  },
+  {
+    "id": 966,
+    "name": "Revavroom",
+    "types": [
+      "Steel",
+      "Poison"
+    ],
+    "ability": "Overcoat",
+    "evolutionChain": [
+      966
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "It creates a gas out of poison and minerals from rocks. It then detonates the gas in its cylinders—now numbering eight—to generate energy.",
+    "stats": {
+      "hp": 80,
+      "atk": 119,
+      "def": 90,
+      "spe": 90
+    }
+  },
+  {
+    "id": 967,
+    "name": "Cyclizar",
+    "types": [
+      "Dragon",
+      "Normal"
+    ],
+    "ability": "Shed Skin",
+    "evolutionChain": [
+      967
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 501,
+    "description": "Apparently Cyclizar has been allowing people to ride on its back since ancient times. Depictions of this have been found in 10,000-year-old murals.",
+    "stats": {
+      "hp": 70,
+      "atk": 95,
+      "def": 65,
+      "spe": 121
+    }
+  },
+  {
+    "id": 968,
+    "name": "Orthworm",
+    "types": [
+      "Steel"
+    ],
+    "ability": "Earth Eater",
+    "evolutionChain": [
+      968
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 480,
+    "description": "When attacked, this Pokémon will wield the tendrils on its body like fists and pelt the opponent with a storm of punches.",
+    "stats": {
+      "hp": 70,
+      "atk": 85,
+      "def": 145,
+      "spe": 65
+    }
+  },
+  {
+    "id": 969,
+    "name": "Glimmet",
+    "types": [
+      "Rock",
+      "Poison"
+    ],
+    "ability": "Toxic Debris",
+    "evolutionChain": [
+      969
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 350,
+    "description": "It absorbs nutrients from cave walls. The petals it wears are made of crystallized poison.",
+    "stats": {
+      "hp": 48,
+      "atk": 35,
+      "def": 42,
+      "spe": 60
+    }
+  },
+  {
+    "id": 970,
+    "name": "Glimmora",
+    "types": [
+      "Rock",
+      "Poison"
+    ],
+    "ability": "Toxic Debris",
+    "evolutionChain": [
+      970
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 525,
+    "description": "When this Pokémon detects danger, it will open up its crystalline petals and fire beams from its conical body.",
+    "stats": {
+      "hp": 83,
+      "atk": 55,
+      "def": 90,
+      "spe": 86
+    },
+    "megaId": 10321
+  },
+  {
+    "id": 971,
+    "name": "Greavard",
+    "types": [
+      "Ghost"
+    ],
+    "ability": "Pickup",
+    "evolutionChain": [
+      971
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 290,
+    "description": "It is said that a dog Pokémon that died in the wild without ever interacting with a human was reborn as this Pokémon.",
+    "stats": {
+      "hp": 50,
+      "atk": 61,
+      "def": 60,
+      "spe": 34
+    }
+  },
+  {
+    "id": 972,
+    "name": "Houndstone",
+    "types": [
+      "Ghost"
+    ],
+    "ability": "Sand Rush",
+    "evolutionChain": [
+      972
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 488,
+    "description": "Houndstone spends most of its time sleeping in graveyards. Among all the dog Pokémon, this one is most loyal to its master.",
+    "stats": {
+      "hp": 72,
+      "atk": 101,
+      "def": 100,
+      "spe": 68
+    }
+  },
+  {
+    "id": 973,
+    "name": "Flamigo",
+    "types": [
+      "Flying",
+      "Fighting"
+    ],
+    "ability": "Scrappy",
+    "evolutionChain": [
+      973
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 500,
+    "description": "This Pokémon apparently ties the base of its neck into a knot so that energy stored in its belly does not escape from its beak.",
+    "stats": {
+      "hp": 82,
+      "atk": 115,
+      "def": 74,
+      "spe": 90
+    }
+  },
+  {
+    "id": 974,
+    "name": "Cetoddle",
+    "types": [
+      "Ice"
+    ],
+    "ability": "Thick Fat",
+    "evolutionChain": [
+      974
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 334,
+    "description": "This species left the ocean and began living on land a very long time ago. It seems to be closely related to Wailmer.",
+    "stats": {
+      "hp": 108,
+      "atk": 68,
+      "def": 45,
+      "spe": 43
+    }
+  },
+  {
+    "id": 975,
+    "name": "Cetitan",
+    "types": [
+      "Ice"
+    ],
+    "ability": "Thick Fat",
+    "evolutionChain": [
+      975
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 521,
+    "description": "This Pokémon wanders around snowy, icy areas. It protects its body with powerful muscles and a thick layer of fat under its skin.",
+    "stats": {
+      "hp": 170,
+      "atk": 113,
+      "def": 65,
+      "spe": 73
+    }
+  },
+  {
+    "id": 976,
+    "name": "Veluza",
+    "types": [
+      "Water",
+      "Psychic"
+    ],
+    "ability": "Mold Breaker",
+    "evolutionChain": [
+      976
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 478,
+    "description": "When Veluza discards unnecessary flesh, its mind becomes honed and its psychic power increases. The spare flesh has a mild but delicious flavor.",
+    "stats": {
+      "hp": 90,
+      "atk": 102,
+      "def": 73,
+      "spe": 70
+    }
+  },
+  {
+    "id": 977,
+    "name": "Dondozo",
+    "types": [
+      "Water"
+    ],
+    "ability": "Unaware",
+    "evolutionChain": [
+      977
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 530,
+    "description": "This Pokémon is a glutton, but it’s bad at getting food. It teams up with a Tatsugiri to catch prey.",
+    "stats": {
+      "hp": 150,
+      "atk": 100,
+      "def": 115,
+      "spe": 35
+    }
+  },
+  {
+    "id": 978,
+    "name": "Tatsugiri-curly",
+    "types": [
+      "Dragon",
+      "Water"
+    ],
+    "ability": "Commander",
+    "evolutionChain": [
+      978
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 475,
+    "description": "This is a small dragon Pokémon. It lives inside the mouth of Dondozo to protect itself from enemies on the outside.",
+    "stats": {
+      "hp": 68,
+      "atk": 50,
+      "def": 60,
+      "spe": 82
+    },
+    "megaId": 10324
+  },
+  {
+    "id": 979,
+    "name": "Annihilape",
+    "types": [
+      "Fighting",
+      "Ghost"
+    ],
+    "ability": "Vital Spirit",
+    "evolutionChain": [
+      979
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 535,
+    "description": "When its anger rose beyond a critical point, this Pokémon gained power that is unfettered by the limits of its physical body.",
+    "stats": {
+      "hp": 110,
+      "atk": 115,
+      "def": 80,
+      "spe": 90
+    }
+  },
+  {
+    "id": 980,
+    "name": "Clodsire",
+    "types": [
+      "Poison",
+      "Ground"
+    ],
+    "ability": "Poison Point",
+    "evolutionChain": [
+      980
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 430,
+    "description": "When attacked, this Pokémon will retaliate by sticking thick spines out from its body. It’s a risky move that puts everything on the line.",
+    "stats": {
+      "hp": 130,
+      "atk": 75,
+      "def": 60,
+      "spe": 20
+    }
+  },
+  {
+    "id": 981,
+    "name": "Farigiraf",
+    "types": [
+      "Normal",
+      "Psychic"
+    ],
+    "ability": "Cud Chew",
+    "evolutionChain": [
+      981
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 520,
+    "description": "Now that the brain waves from the head and tail are synced up, the psychic power of this Pokémon is 10 times stronger than Girafarig’s.",
+    "stats": {
+      "hp": 120,
+      "atk": 90,
+      "def": 70,
+      "spe": 60
+    }
+  },
+  {
+    "id": 982,
+    "name": "Dudunsparce-two-segment",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Serene Grace",
+    "evolutionChain": [
+      982
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 520,
+    "description": "This Pokémon uses its hard tail to make its nest by boring holes into bedrock deep underground. The nest can reach lengths of over six miles.",
+    "stats": {
+      "hp": 125,
+      "atk": 100,
+      "def": 80,
+      "spe": 55
+    }
+  },
+  {
+    "id": 983,
+    "name": "Kingambit",
+    "types": [
+      "Dark",
+      "Steel"
+    ],
+    "ability": "Defiant",
+    "evolutionChain": [
+      983
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 550,
+    "description": "Only a Bisharp that stands above all others in its vast army can evolve into Kingambit.",
+    "stats": {
+      "hp": 100,
+      "atk": 135,
+      "def": 120,
+      "spe": 50
+    }
+  },
+  {
+    "id": 984,
+    "name": "Great-tusk",
+    "types": [
+      "Ground",
+      "Fighting"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      984
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "Sightings of this Pokémon have occurred in recent years. The name Great Tusk was taken from a creature listed in a certain book.",
+    "stats": {
+      "hp": 115,
+      "atk": 131,
+      "def": 131,
+      "spe": 87
+    }
+  },
+  {
+    "id": 985,
+    "name": "Scream-tail",
+    "types": [
+      "Fairy",
+      "Psychic"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      985
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "There has been only one reported sighting of this Pokémon. It resembles a mysterious creature depicted in an old expedition journal.",
+    "stats": {
+      "hp": 115,
+      "atk": 65,
+      "def": 99,
+      "spe": 111
+    }
+  },
+  {
+    "id": 986,
+    "name": "Brute-bonnet",
+    "types": [
+      "Grass",
+      "Dark"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      986
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "It is possible that the creature listed as Brute Bonnet in a certain book could actually be this Pokémon.",
+    "stats": {
+      "hp": 111,
+      "atk": 127,
+      "def": 99,
+      "spe": 55
+    }
+  },
+  {
+    "id": 987,
+    "name": "Flutter-mane",
+    "types": [
+      "Ghost",
+      "Fairy"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      987
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "This Pokémon has characteristics similar to those of Flutter Mane, a creature mentioned in a certain book.",
+    "stats": {
+      "hp": 55,
+      "atk": 55,
+      "def": 55,
+      "spe": 135
+    }
+  },
+  {
+    "id": 988,
+    "name": "Slither-wing",
+    "types": [
+      "Bug",
+      "Fighting"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      988
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "This mysterious Pokémon has some similarities to a creature that an old book introduced as Slither Wing.",
+    "stats": {
+      "hp": 85,
+      "atk": 135,
+      "def": 79,
+      "spe": 81
+    }
+  },
+  {
+    "id": 989,
+    "name": "Sandy-shocks",
+    "types": [
+      "Electric",
+      "Ground"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      989
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "No records exist of this Pokémon being caught. Data is lacking, but the Pokémon’s traits match up with a creature shown in an expedition journal.",
+    "stats": {
+      "hp": 85,
+      "atk": 81,
+      "def": 97,
+      "spe": 101
+    }
+  },
+  {
+    "id": 990,
+    "name": "Iron-treads",
+    "types": [
+      "Ground",
+      "Steel"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      990
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "This Pokémon closely resembles a scientific weapon that a paranormal magazine claimed was sent to this planet by aliens.",
+    "stats": {
+      "hp": 90,
+      "atk": 112,
+      "def": 120,
+      "spe": 106
+    }
+  },
+  {
+    "id": 991,
+    "name": "Iron-bundle",
+    "types": [
+      "Ice",
+      "Water"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      991
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "Its shape is similar to a robot featured in a paranormal magazine article. The robot was said to have been created by an ancient civilization.",
+    "stats": {
+      "hp": 56,
+      "atk": 80,
+      "def": 114,
+      "spe": 136
+    }
+  },
+  {
+    "id": 992,
+    "name": "Iron-hands",
+    "types": [
+      "Fighting",
+      "Electric"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      992
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "It is very similar to a cyborg covered exclusively by a paranormal magazine. The cyborg was said to be the modified form of a certain athlete.",
+    "stats": {
+      "hp": 154,
+      "atk": 140,
+      "def": 108,
+      "spe": 50
+    }
+  },
+  {
+    "id": 993,
+    "name": "Iron-jugulis",
+    "types": [
+      "Dark",
+      "Flying"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      993
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "It resembles a certain Pokémon introduced in a paranormal magazine, described as the offspring of a Hydreigon that fell in love with a robot.",
+    "stats": {
+      "hp": 94,
+      "atk": 80,
+      "def": 86,
+      "spe": 108
+    }
+  },
+  {
+    "id": 994,
+    "name": "Iron-moth",
+    "types": [
+      "Fire",
+      "Poison"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      994
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "This Pokémon resembles an unknown object described in a paranormal magazine as a UFO sent to observe humanity.",
+    "stats": {
+      "hp": 80,
+      "atk": 70,
+      "def": 60,
+      "spe": 110
+    }
+  },
+  {
+    "id": 995,
+    "name": "Iron-thorns",
+    "types": [
+      "Rock",
+      "Electric"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      995
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 570,
+    "description": "It has some similarities to a Pokémon introduced in a dubious magazine as a Tyranitar from one billion years into the future.",
+    "stats": {
+      "hp": 100,
+      "atk": 134,
+      "def": 110,
+      "spe": 72
+    }
+  },
+  {
+    "id": 996,
+    "name": "Frigibax",
+    "types": [
+      "Dragon",
+      "Ice"
+    ],
+    "ability": "Thermal Exchange",
+    "evolutionChain": [
+      996
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 320,
+    "description": "Frigibax absorbs heat through its dorsal fin and converts the heat into ice energy. The higher the temperature, the more energy Frigibax stores.",
+    "stats": {
+      "hp": 65,
+      "atk": 75,
+      "def": 45,
+      "spe": 55
+    }
+  },
+  {
+    "id": 997,
+    "name": "Arctibax",
+    "types": [
+      "Dragon",
+      "Ice"
+    ],
+    "ability": "Thermal Exchange",
+    "evolutionChain": [
+      997
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 423,
+    "description": "Arctibax freezes the air around it, protecting its face with an ice mask and turning its dorsal fin into a blade of ice.",
+    "stats": {
+      "hp": 90,
+      "atk": 95,
+      "def": 66,
+      "spe": 62
+    }
+  },
+  {
+    "id": 998,
+    "name": "Baxcalibur",
+    "types": [
+      "Dragon",
+      "Ice"
+    ],
+    "ability": "Thermal Exchange",
+    "evolutionChain": [
+      998
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pseudo-legendario",
+    "baseStatsSum": 600,
+    "description": "This Pokémon blasts cryogenic air out from its mouth. This air can instantly freeze even liquid-hot lava.",
+    "stats": {
+      "hp": 115,
+      "atk": 145,
+      "def": 92,
+      "spe": 87
+    },
+    "megaId": 10325
+  },
+  {
+    "id": 999,
+    "name": "Gimmighoul",
+    "types": [
+      "Ghost"
+    ],
+    "ability": "Rattled",
+    "evolutionChain": [
+      999
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 300,
+    "description": "This Pokémon was born inside a treasure chest about 1,500 years ago. It sucks the life-force out of scoundrels who try to steal the treasure.",
+    "stats": {
+      "hp": 45,
+      "atk": 30,
+      "def": 70,
+      "spe": 10
+    }
+  },
+  {
+    "id": 1000,
+    "name": "Gholdengo",
+    "types": [
+      "Steel",
+      "Ghost"
+    ],
+    "ability": "Good As Gold",
+    "evolutionChain": [
+      1000
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 550,
+    "description": "Its body seems to be made up of 1,000 coins. This Pokémon gets along well with others and is quick to make friends with anybody.",
+    "stats": {
+      "hp": 87,
+      "atk": 60,
+      "def": 95,
+      "spe": 84
+    }
+  },
+  {
+    "id": 1001,
+    "name": "Wo-chien",
+    "types": [
+      "Dark",
+      "Grass"
+    ],
+    "ability": "Tablets Of Ruin",
+    "evolutionChain": [
+      1001
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 570,
+    "description": "The grudge of a person punished for writing the king’s evil deeds upon wooden tablets has clad itself in dead leaves to become a Pokémon.",
+    "stats": {
+      "hp": 85,
+      "atk": 85,
+      "def": 100,
+      "spe": 70
+    }
+  },
+  {
+    "id": 1002,
+    "name": "Chien-pao",
+    "types": [
+      "Dark",
+      "Ice"
+    ],
+    "ability": "Sword Of Ruin",
+    "evolutionChain": [
+      1002
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 570,
+    "description": "This Pokémon can control 100 tons of fallen snow. It plays around innocently by leaping in and out of avalanches it has caused.",
+    "stats": {
+      "hp": 80,
+      "atk": 120,
+      "def": 80,
+      "spe": 135
+    }
+  },
+  {
+    "id": 1003,
+    "name": "Ting-lu",
+    "types": [
+      "Dark",
+      "Ground"
+    ],
+    "ability": "Vessel Of Ruin",
+    "evolutionChain": [
+      1003
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 570,
+    "description": "The fear poured into an ancient ritual vessel has clad itself in rocks and dirt to become a Pokémon.",
+    "stats": {
+      "hp": 155,
+      "atk": 110,
+      "def": 125,
+      "spe": 45
+    }
+  },
+  {
+    "id": 1004,
+    "name": "Chi-yu",
+    "types": [
+      "Dark",
+      "Fire"
+    ],
+    "ability": "Beads Of Ruin",
+    "evolutionChain": [
+      1004
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 570,
+    "description": "It controls flames burning at over 5,400 degrees Fahrenheit. It casually swims through the sea of lava it creates by melting rock and sand.",
+    "stats": {
+      "hp": 55,
+      "atk": 80,
+      "def": 80,
+      "spe": 100
+    }
+  },
+  {
+    "id": 1005,
+    "name": "Roaring-moon",
+    "types": [
+      "Dragon",
+      "Dark"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      1005
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 590,
+    "description": "It is possible that this is the creature listed as Roaring Moon in an expedition journal that still holds many mysteries.",
+    "stats": {
+      "hp": 105,
+      "atk": 139,
+      "def": 71,
+      "spe": 119
+    }
+  },
+  {
+    "id": 1006,
+    "name": "Iron-valiant",
+    "types": [
+      "Fairy",
+      "Fighting"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      1006
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 590,
+    "description": "It has some similarities to a mad scientist’s invention covered in a paranormal magazine.",
+    "stats": {
+      "hp": 74,
+      "atk": 130,
+      "def": 90,
+      "spe": 116
+    }
+  },
+  {
+    "id": 1007,
+    "name": "Koraidon",
+    "types": [
+      "Fighting",
+      "Dragon"
+    ],
+    "ability": "Orichalcum Pulse",
+    "evolutionChain": [
+      1007
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 670,
+    "description": "This seems to be the Winged King mentioned in an old expedition journal. It was said to have split the land with its bare fists.",
+    "stats": {
+      "hp": 100,
+      "atk": 135,
+      "def": 115,
+      "spe": 135
+    }
+  },
+  {
+    "id": 1008,
+    "name": "Miraidon",
+    "types": [
+      "Electric",
+      "Dragon"
+    ],
+    "ability": "Hadron Engine",
+    "evolutionChain": [
+      1008
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 670,
+    "description": "Much remains unknown about this creature. It resembles Cyclizar, but it is far more ruthless and powerful.",
+    "stats": {
+      "hp": 100,
+      "atk": 85,
+      "def": 100,
+      "spe": 135
+    }
+  },
+  {
+    "id": 1009,
+    "name": "Walking-wake",
+    "types": [
+      "Water",
+      "Dragon"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      1009
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 590,
+    "description": "This ferocious creature is shrouded in mystery. It's named after an aquatic monster mentioned in an old expedition journal.",
+    "stats": {
+      "hp": 99,
+      "atk": 83,
+      "def": 91,
+      "spe": 109
+    }
+  },
+  {
+    "id": 1010,
+    "name": "Iron-leaves",
+    "types": [
+      "Grass",
+      "Psychic"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      1010
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 590,
+    "description": "Many of its physical characteristics match those of a Virizion from the future that was covered in a paranormal magazine.",
+    "stats": {
+      "hp": 90,
+      "atk": 130,
+      "def": 88,
+      "spe": 104
+    }
+  },
+  {
+    "id": 1011,
+    "name": "Dipplin",
+    "types": [
+      "Grass",
+      "Dragon"
+    ],
+    "ability": "Supersweet Syrup",
+    "evolutionChain": [
+      1011
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Poco común",
+    "baseStatsSum": 485,
+    "description": "Dipplin is two creatures in one Pokémon. Its evolution was triggered by a special apple grown only in one place.",
+    "stats": {
+      "hp": 80,
+      "atk": 80,
+      "def": 110,
+      "spe": 40
+    }
+  },
+  {
+    "id": 1012,
+    "name": "Poltchageist",
+    "types": [
+      "Grass",
+      "Ghost"
+    ],
+    "ability": "Hospitality",
+    "evolutionChain": [
+      1012
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Común",
+    "baseStatsSum": 308,
+    "description": "Supposedly, the regrets of a tea ceremony master who died before perfecting his craft lingered in some matcha and became a Pokémon.",
+    "stats": {
+      "hp": 40,
+      "atk": 45,
+      "def": 45,
+      "spe": 50
+    }
+  },
+  {
+    "id": 1013,
+    "name": "Sinistcha",
+    "types": [
+      "Grass",
+      "Ghost"
+    ],
+    "ability": "Hospitality",
+    "evolutionChain": [
+      1013
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 508,
+    "description": "It pretends to be tea, trying to fool people into drinking it so it can drain their life-force. Its ruse is generally unsuccessful.",
+    "stats": {
+      "hp": 71,
+      "atk": 60,
+      "def": 106,
+      "spe": 70
+    }
+  },
+  {
+    "id": 1014,
+    "name": "Okidogi",
+    "types": [
+      "Poison",
+      "Fighting"
+    ],
+    "ability": "Toxic Chain",
+    "evolutionChain": [
+      1014
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 555,
+    "description": "After all its muscles were stimulated by the toxic chain around its neck, Okidogi transformed and gained a powerful physique.",
+    "stats": {
+      "hp": 88,
+      "atk": 128,
+      "def": 115,
+      "spe": 80
+    }
+  },
+  {
+    "id": 1015,
+    "name": "Munkidori",
+    "types": [
+      "Poison",
+      "Psychic"
+    ],
+    "ability": "Toxic Chain",
+    "evolutionChain": [
+      1015
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 555,
+    "description": "The chain is made from toxins that enhance capabilities. It stimulated Munkidori's brain and caused the Pokémon's psychic powers to bloom.",
+    "stats": {
+      "hp": 88,
+      "atk": 75,
+      "def": 66,
+      "spe": 106
+    }
+  },
+  {
+    "id": 1016,
+    "name": "Fezandipiti",
+    "types": [
+      "Poison",
+      "Fairy"
+    ],
+    "ability": "Toxic Chain",
+    "evolutionChain": [
+      1016
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 555,
+    "description": "Fezandipiti owes its beautiful looks and lovely voice to the toxic stimulants emanating from the chain wrapped around its body.",
+    "stats": {
+      "hp": 88,
+      "atk": 91,
+      "def": 82,
+      "spe": 99
+    }
+  },
+  {
+    "id": 1017,
+    "name": "Ogerpon",
+    "types": [
+      "Grass"
+    ],
+    "ability": "Defiant",
+    "evolutionChain": [
+      1017
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 550,
+    "description": "This Pokémon's type changes based on which mask it's wearing. It confounds its enemies with nimble movements and kicks.",
+    "stats": {
+      "hp": 80,
+      "atk": 120,
+      "def": 84,
+      "spe": 110
+    }
+  },
+  {
+    "id": 1018,
+    "name": "Archaludon",
+    "types": [
+      "Steel",
+      "Dragon"
+    ],
+    "ability": "Stamina",
+    "evolutionChain": [
+      1018
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 600,
+    "description": "It gathers static electricity from its surroundings. The beams it launches when down on all fours are tremendously powerful.",
+    "stats": {
+      "hp": 90,
+      "atk": 105,
+      "def": 130,
+      "spe": 85
+    }
+  },
+  {
+    "id": 1019,
+    "name": "Hydrapple",
+    "types": [
+      "Grass",
+      "Dragon"
+    ],
+    "ability": "Supersweet Syrup",
+    "evolutionChain": [
+      1019
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Raro",
+    "baseStatsSum": 540,
+    "description": "Seven syrpents live inside an apple made of syrup. The syrpent in the center is the commander.",
+    "stats": {
+      "hp": 106,
+      "atk": 80,
+      "def": 110,
+      "spe": 44
+    }
+  },
+  {
+    "id": 1020,
+    "name": "Gouging-fire",
+    "types": [
+      "Fire",
+      "Dragon"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      1020
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 590,
+    "description": "There are scant few reports of this creature being sighted. One short video shows it rampaging and spouting pillars of flame.",
+    "stats": {
+      "hp": 105,
+      "atk": 115,
+      "def": 121,
+      "spe": 91
+    }
+  },
+  {
+    "id": 1021,
+    "name": "Raging-bolt",
+    "types": [
+      "Electric",
+      "Dragon"
+    ],
+    "ability": "Protosynthesis",
+    "evolutionChain": [
+      1021
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 590,
+    "description": "It's said to incinerate everything around it with lightning launched from its fur. Very little is known about this creature.",
+    "stats": {
+      "hp": 125,
+      "atk": 73,
+      "def": 91,
+      "spe": 75
+    }
+  },
+  {
+    "id": 1022,
+    "name": "Iron-boulder",
+    "types": [
+      "Rock",
+      "Psychic"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      1022
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 590,
+    "description": "It resembles a Pokémon described in a dubious magazine as a Terrakion that had been modified by an evil organization.",
+    "stats": {
+      "hp": 90,
+      "atk": 120,
+      "def": 80,
+      "spe": 124
+    }
+  },
+  {
+    "id": 1023,
+    "name": "Iron-crown",
+    "types": [
+      "Steel",
+      "Psychic"
+    ],
+    "ability": "Quark Drive",
+    "evolutionChain": [
+      1023
+    ],
+    "isLegendary": false,
+    "isMythical": false,
+    "rarity": "Pokémon Paradoja",
+    "baseStatsSum": 590,
+    "description": "It resembles a mysterious object introduced in a paranormal magazine as a cutting-edge weapon shaped like a Cobalion.",
+    "stats": {
+      "hp": 90,
+      "atk": 72,
+      "def": 100,
+      "spe": 98
+    }
+  },
+  {
+    "id": 1024,
+    "name": "Terapagos",
+    "types": [
+      "Normal"
+    ],
+    "ability": "Tera Shift",
+    "evolutionChain": [
+      1024
+    ],
+    "isLegendary": true,
+    "isMythical": false,
+    "rarity": "Legendario",
+    "baseStatsSum": 450,
+    "description": "Terapagos protects itself using its power to transform energy into hard crystals. This Pokémon is the source of the Terastal phenomenon.",
+    "stats": {
+      "hp": 90,
+      "atk": 65,
+      "def": 85,
+      "spe": 60
+    }
+  },
+  {
+    "id": 1025,
+    "name": "Pecharunt",
+    "types": [
+      "Poison",
+      "Ghost"
+    ],
+    "ability": "Poison Puppeteer",
+    "evolutionChain": [
+      1025
+    ],
+    "isLegendary": false,
+    "isMythical": true,
+    "rarity": "Singular (Mítico)",
+    "baseStatsSum": 600,
+    "description": "It feeds others toxic mochi that draw out desires and capabilities. Those who eat the mochi fall under Pecharunt’s control, chained to its will.",
+    "stats": {
+      "hp": 88,
+      "atk": 88,
+      "def": 160,
+      "spe": 88
+    }
   }
-];;
+];
 
 const PACK_TYPES = [
-  { id: 'standard', name: 'Sobre Estándar', cost: 1200, costType: 'coins', description: '75% Común, 20% Raro, 5% Mítico', odds: { Common: 0.75, Rare: 0.20, Mythical: 0.05, Legendary: 0 } },
-  { id: 'premium', name: 'Sobre Premium', cost: 5000, costType: 'coins', description: '50% Raro, 40% Mítico, 10% Legendario', odds: { Common: 0, Rare: 0.50, Mythical: 0.40, Legendary: 0.10 } },
-  { id: 'elite', name: 'Sobre Élite', cost: 12000, costType: 'coins', description: '30% Raro, 50% Mítico, 20% Legendario', odds: { Common: 0, Rare: 0.30, Mythical: 0.50, Legendary: 0.20 } },
-  { id: 'master', name: 'Sobre Maestro', cost: 25000, costType: 'coins', description: 'Garantiza Mítico o Legendario', odds: { Common: 0, Rare: 0, Mythical: 0.70, Legendary: 0.30 } },
-  { id: 'stardust', name: 'Sobre Estelar', cost: 15000, costType: 'stardust', description: '100% Legendario', odds: { Common: 0, Rare: 0, Mythical: 0, Legendary: 1.0 } },
-  { id: 'mythic', name: 'Sobre Mítico', cost: 60000, costType: 'coins', description: 'Alta probabilidad de Legendario', odds: { Common: 0, Rare: 0, Mythical: 0.40, Legendary: 0.60 } },
-  { id: 'champion', name: 'Sobre Campeón', cost: 40000, costType: 'stardust', description: '100% Legendario con stats base altos', odds: { Common: 0, Rare: 0, Mythical: 0, Legendary: 1.0 } },
+  { id: 'standard', name: 'Sobre Estándar', cost: 1200, costType: 'coins', description: '75% Común, 20% Poco común, 5% Raro', odds: { 'Común': 0.75, 'Poco común': 0.20, 'Raro': 0.05, 'Legendario': 0, 'Pseudo-legendario': 0, 'Singular (Mítico)': 0, 'Ultraente': 0, 'Pokémon Paradoja': 0 } },
+  { id: 'premium', name: 'Sobre Premium', cost: 5000, costType: 'coins', description: '50% Poco común, 40% Raro, 10% Pseudo-legendario', odds: { 'Común': 0, 'Poco común': 0.50, 'Raro': 0.40, 'Legendario': 0, 'Pseudo-legendario': 0.10, 'Singular (Mítico)': 0, 'Ultraente': 0, 'Pokémon Paradoja': 0 } },
+  { id: 'elite', name: 'Sobre Élite', cost: 12000, costType: 'coins', description: '30% Raro, 50% Pseudo-legendario, 20% Legendario/Singular', odds: { 'Común': 0, 'Poco común': 0, 'Raro': 0.30, 'Legendario': 0.10, 'Pseudo-legendario': 0.50, 'Singular (Mítico)': 0.10, 'Ultraente': 0, 'Pokémon Paradoja': 0 } },
+  { id: 'master', name: 'Sobre Maestro', cost: 25000, costType: 'coins', description: 'Garantiza Legendario, Singular, Ultraente o Paradoja', odds: { 'Común': 0, 'Poco común': 0, 'Raro': 0, 'Legendario': 0.40, 'Pseudo-legendario': 0, 'Singular (Mítico)': 0.30, 'Ultraente': 0.15, 'Pokémon Paradoja': 0.15 } },
+  { id: 'stardust', name: 'Sobre Estelar', cost: 15000, costType: 'stardust', description: '100% Legendario', odds: { 'Común': 0, 'Poco común': 0, 'Raro': 0, 'Legendario': 1.0, 'Pseudo-legendario': 0, 'Singular (Mítico)': 0, 'Ultraente': 0, 'Pokémon Paradoja': 0 } },
+  { id: 'mythic', name: 'Sobre Mítico', cost: 60000, costType: 'coins', description: 'Alta probabilidad de Singular', odds: { 'Común': 0, 'Poco común': 0, 'Raro': 0, 'Legendario': 0.20, 'Pseudo-legendario': 0, 'Singular (Mítico)': 0.60, 'Ultraente': 0.10, 'Pokémon Paradoja': 0.10 } },
+  { id: 'champion', name: 'Sobre Campeón', cost: 40000, costType: 'stardust', description: '100% Legendario con stats base altos', odds: { 'Común': 0, 'Poco común': 0, 'Raro': 0, 'Legendario': 1.0, 'Pseudo-legendario': 0, 'Singular (Mítico)': 0, 'Ultraente': 0, 'Pokémon Paradoja': 0 } },
 ];
 
 const EQUIPMENT_TYPES: Item[] = [
-  { id: 'leftovers', name: 'Restos', description: 'Recupera un poco de HP cada turno.', effect: { hp: 10 }, rarity: 'Rare' },
-  { id: 'choice_band', name: 'Cinta Elegida', description: 'Aumenta mucho el Ataque.', effect: { atk: 20 }, rarity: 'Mythical' },
-  { id: 'choice_specs', name: 'Gafas Especiales', description: 'Aumenta mucho el Ataque (Especial).', effect: { atk: 20 }, rarity: 'Mythical' },
-  { id: 'choice_scarf', name: 'Pañuelo Elegido', description: 'Aumenta mucho la Velocidad.', effect: { spe: 20 }, rarity: 'Mythical' },
-  { id: 'focus_band', name: 'Cinta Focus', description: 'Aumenta la Defensa.', effect: { def: 15 }, rarity: 'Rare' },
-  { id: 'lucky_egg', name: 'Huevo Suerte', description: 'Aumenta la ganancia de TP.', effect: {}, rarity: 'Legendary' },
+  { id: 'leftovers', name: 'Restos', description: 'Recupera un poco de HP cada turno.', effect: { hp: 10 }, rarity: 'Raro' },
+  { id: 'choice_band', name: 'Cinta Elegida', description: 'Aumenta mucho el Ataque.', effect: { atk: 20 }, rarity: 'Singular (Mítico)' },
+  { id: 'choice_specs', name: 'Gafas Especiales', description: 'Aumenta mucho el Ataque (Especial).', effect: { atk: 20 }, rarity: 'Singular (Mítico)' },
+  { id: 'choice_scarf', name: 'Pañuelo Elegido', description: 'Aumenta mucho la Velocidad.', effect: { spe: 20 }, rarity: 'Singular (Mítico)' },
+  { id: 'focus_band', name: 'Cinta Focus', description: 'Aumenta la Defensa.', effect: { def: 15 }, rarity: 'Raro' },
+  { id: 'lucky_egg', name: 'Huevo Suerte', description: 'Aumenta la ganancia de TP.', effect: {}, rarity: 'Legendario' },
 ];
 
 const SPONSOR_TEMPLATES: Omit<Sponsor, 'currentValue' | 'isCompleted'>[] = [
@@ -15865,25 +23270,13 @@ const fetchEvolutionLevel = async (id: number): Promise<number | null> => {
 };
 
 const getPokemonRarity = (base: PokemonBase): Rarity => {
-  if (base.isLegendary) return 'Legendary';
-  if (base.isMythical) return 'Mythical';
-  
-  // If baseStatsSum is explicitly provided and high
-  if (base.baseStatsSum && base.baseStatsSum >= 500) return 'Rare';
-  
-  // Final evolutions of 3-stage chains are usually Rare
-  if (base.evolutionChain.length >= 3 && base.id === base.evolutionChain[base.evolutionChain.length - 1]) return 'Rare';
-  
-  // Strong single-stage or 2-stage final evolutions
-  const rareNames = [
-    'Lapras', 'Snorlax', 'Pinsir', 'Scyther', 'Tauros', 'Kangaskhan', 'Aerodactyl', 
-    'Heracross', 'Skarmory', 'Lucario', 'Arcanine', 'Gyarados', 'Steelix', 'Scizor',
-    'Kingdra', 'Porygon2', 'Porygon-Z', 'Electivire', 'Magmortar', 'Glaceon', 'Leafeon',
-    'Sylveon', 'Espeon', 'Umbreon', 'Vaporeon', 'Jolteon', 'Flareon', 'Absol', 'Spiritomb'
-  ];
-  if (rareNames.includes(base.name)) return 'Rare';
-
-  return 'Common';
+  if (base.rarity) return migrateRarity(base.rarity);
+  if (base.isLegendary) return 'Legendario';
+  if (base.isMythical) return 'Singular (Mítico)';
+  if (base.baseStatsSum && base.baseStatsSum >= 600) return 'Pseudo-legendario';
+  if (base.baseStatsSum && base.baseStatsSum >= 500) return 'Raro';
+  if (base.baseStatsSum && base.baseStatsSum >= 400) return 'Poco común';
+  return 'Común';
 };
 
 const calculateActualStat = (base: number, iv: number, ev: number, level: number, natureMod: number = 1) => {
@@ -15901,8 +23294,8 @@ const generatePokemon = async (base: PokemonBase, rarity: Rarity, targetLevel: n
   const shinyChance = 0.01 * shinyMultiplier;
   const isShiny = Math.random() < shinyChance;
 
-  // Academy bonus for Common and Rare
-  const academyBonus = (rarity === 'Common' || rarity === 'Rare') ? (academyLevel - 1) * 5 : 0;
+  // Academy bonus for lower rarities
+  const academyBonus = (rarity === 'Común' || rarity === 'Poco común' || rarity === 'Raro') ? (academyLevel - 1) * 5 : 0;
 
   const [minBase, maxBase] = config.baseStatRange;
   const baseStatValue = (minBase + Math.floor(Math.random() * (maxBase - minBase + 1)) + academyBonus) * (isShiny ? 1.2 : 1);
@@ -16019,11 +23412,12 @@ const generatePokemon = async (base: PokemonBase, rarity: Rarity, targetLevel: n
     hp,
     maxHp: hp,
     ovr: Math.max(
-      { Common: 25, Rare: 45, Mythical: 65, Legendary: 85 }[rarity] + Math.floor(Math.random() * 11) - 5, 
+      { 'Común': 25, 'Poco común': 35, 'Raro': 45, 'Pseudo-legendario': 65, 'Legendario': 85, 'Singular (Mítico)': 85, 'Ultraente': 85, 'Pokémon Paradoja': 85 }[rarity] + Math.floor(Math.random() * 11) - 5, 
       Math.floor((atk + def + spe + hp/2) / 3.5)
     ),
     isEvolved: false,
     isShiny,
+    sprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${isShiny ? 'shiny/' : ''}${base.id}.png`,
     fatigue: 0,
     moral: 100,
     happiness: baseHappiness,
@@ -16091,7 +23485,7 @@ const PokemonCardUI = ({
       <div className="absolute inset-0 opacity-0 group-hover:opacity-30 pointer-events-none z-10 bg-[linear-gradient(110deg,transparent_20%,rgba(255,255,255,0.6)_40%,rgba(255,255,255,0.8)_50%,rgba(255,255,255,0.6)_60%,transparent_80%)] bg-[length:200%_100%] transition-opacity duration-500 animate-shine" />
       
       {/* Rarity Specific Effects */}
-      {(pokemon.rarity === 'Mythical' || pokemon.rarity === 'Legendary') && (
+      {(pokemon.rarity === 'Singular (Mítico)' || pokemon.rarity === 'Legendario' || pokemon.rarity === 'Ultraente' || pokemon.rarity === 'Pokémon Paradoja') && (
         <div className="absolute inset-0 opacity-20 pointer-events-none z-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.2),transparent_70%)] animate-pulse" />
       )}
 
@@ -16152,7 +23546,7 @@ const PokemonCardUI = ({
         </div>
 
         <motion.img 
-          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.isShiny ? 'shiny/' : ''}${pokemon.id}.png`} 
+          src={getPokemonImage(pokemon)} 
           alt={pokemon.name}
           className={`w-28 h-28 xs:w-32 xs:h-32 sm:w-44 sm:h-44 object-contain relative z-10 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-500 animate-float ${pokemon.isInjured ? 'grayscale opacity-50' : ''}`}
           referrerPolicy="no-referrer"
@@ -16349,7 +23743,7 @@ const CHAMPIONSHIP_TEAMS: LeagueTeam[] = [
 
 const getPokemonImage = (pokemon: any, isBack = false, isOfficial = false) => {
   let id = pokemon.p ? pokemon.p.id : pokemon.id;
-  const isShiny = pokemon.isShiny || false;
+  const isShiny = pokemon.p ? pokemon.p.isShiny : pokemon.isShiny;
   const megaEvolved = pokemon.p ? pokemon.p.megaEvolved : pokemon.megaEvolved;
   const megaStone = pokemon.p ? pokemon.p.megaStone : pokemon.megaStone;
   
@@ -16373,13 +23767,35 @@ const getPokemonImage = (pokemon: any, isBack = false, isOfficial = false) => {
   return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${backStr}${shinyStr}${id}.png`;
 };
 
+const migrateRarity = (rarity: string): Rarity => {
+  switch(rarity) {
+    case 'Common': return 'Común';
+    case 'Uncommon': return 'Poco común';
+    case 'Rare': return 'Raro';
+    case 'Epic': return 'Pseudo-legendario';
+    case 'Legendary': return 'Legendario';
+    case 'Mythical': return 'Singular (Mítico)';
+    case 'Ultra Beast': return 'Ultraente';
+    case 'Paradox': return 'Pokémon Paradoja';
+    default: return rarity as Rarity;
+  }
+};
+
+const migratePokemon = (p: any): any => {
+  if (!p) return p;
+  return {
+    ...p,
+    rarity: p.rarity ? migrateRarity(p.rarity) : 'Común'
+  };
+};
+
 export default function App() {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'team' | 'shop' | 'battles' | 'pokedex' | 'lab' | 'market' | 'settings' | 'hallOfFame' | 'missions' | 'event' | 'facilities' | 'staff' | 'league' | 'inventory' | 'explore'>('team');
+  const [activeTab, setActiveTab] = useState<'team' | 'shop' | 'battles' | 'pokedex' | 'lab' | 'market' | 'settings' | 'hallOfFame' | 'missions' | 'event' | 'facilities' | 'staff' | 'league' | 'inventory' | 'explore' | 'multiplayer' | 'friends'>('team');
   const [gameState, setGameState] = useState<'management' | 'battle'>('management');
   const [selectedLabPokemonId, setSelectedLabPokemonId] = useState<string | null>(null);
   const [showBatchTraining, setShowBatchTraining] = useState(false);
@@ -16445,7 +23861,7 @@ export default function App() {
   const [collection, setCollection] = useState<PokemonCard[]>(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem('plm_collection') || '[]');
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map(migratePokemon) : [];
     } catch {
       return [];
     }
@@ -16651,7 +24067,7 @@ export default function App() {
   const [items, setItems] = useState<Item[]>(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem('plm_items') || 'null');
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map(migratePokemon) : [];
     } catch {
       return [];
     }
@@ -16659,7 +24075,7 @@ export default function App() {
   const [marketOffers, setMarketOffers] = useState<MarketOffer[]>(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem('plm_marketOffers') || 'null');
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map((o: any) => ({ ...o, pokemon: migratePokemon(o.pokemon) })) : [];
     } catch {
       return [];
     }
@@ -16671,7 +24087,7 @@ export default function App() {
   const [hallOfFame, setHallOfFame] = useState<PokemonCard[]>(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem('plm_hallOfFame') || '[]');
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map(migratePokemon) : [];
     } catch {
       return [];
     }
@@ -16681,7 +24097,7 @@ export default function App() {
       const parsed = JSON.parse(localStorage.getItem('plm_nursery') || 'null');
       if (parsed && typeof parsed === 'object') {
         return {
-          parents: Array.isArray(parsed.parents) ? parsed.parents : [],
+          parents: Array.isArray(parsed.parents) ? parsed.parents.map(migratePokemon) : [],
           eggProgress: typeof parsed.eggProgress === 'number' ? parsed.eggProgress : 0
         };
       }
@@ -16764,9 +24180,28 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        useGameStore.getState().setUid(currentUser.uid);
+        useGameStore.getState().setUserName(currentUser.displayName || 'Entrenador');
+        
+        // Create/Update user profile for friends system
+        try {
+          await setDoc(doc(getFirestore(), 'users', currentUser.uid), {
+            name: currentUser.displayName || 'Entrenador',
+            photoURL: currentUser.photoURL || '',
+            updatedAt: Date.now(),
+            progress: {
+              coins: useGameStore.getState().coins,
+              leagueLevel: useGameStore.getState().leagueLevel || 1,
+              pokedexCount: useGameStore.getState().pokedex?.length || 0
+            }
+          }, { merge: true });
+        } catch (error) {
+          console.error("Error updating user profile:", error);
+        }
+
         setIsCloudSyncing(true);
         try {
-          const docRef = doc(db, 'saves', currentUser.uid);
+          const docRef = doc(getFirestore(), 'saves', currentUser.uid);
           const docSnap = await getDoc(docRef);
           
           if (docSnap.exists()) {
@@ -16781,7 +24216,7 @@ export default function App() {
               if (data.teamName) setTeamName(data.teamName);
               if (data.teamLogo) setTeamLogo(data.teamLogo);
               if (data.totalMatches !== undefined) setTotalMatches(data.totalMatches);
-              if (data.collection && Array.isArray(data.collection)) setCollection(data.collection);
+              if (data.collection && Array.isArray(data.collection)) setCollection(data.collection.map(migratePokemon));
               if (data.team && Array.isArray(data.team)) setTeam(data.team);
               if (data.history && Array.isArray(data.history)) setHistory(data.history);
               if (data.leagueLevel !== undefined) setLeagueLevel(data.leagueLevel);
@@ -16806,19 +24241,19 @@ export default function App() {
                 });
               }
               if (data.activeSponsor !== undefined) setActiveSponsor(data.activeSponsor);
-              if (data.items && Array.isArray(data.items)) setItems(data.items);
-              if (data.hallOfFame && Array.isArray(data.hallOfFame)) setHallOfFame(data.hallOfFame);
+              if (data.items && Array.isArray(data.items)) setItems(data.items.map(migratePokemon));
+              if (data.hallOfFame && Array.isArray(data.hallOfFame)) setHallOfFame(data.hallOfFame.map(migratePokemon));
               if (data.nursery !== undefined) {
                 if (data.nursery && typeof data.nursery === 'object') {
                   setNursery({
-                    parents: Array.isArray(data.nursery.parents) ? data.nursery.parents : [],
+                    parents: Array.isArray(data.nursery.parents) ? data.nursery.parents.map(migratePokemon) : [],
                     eggProgress: typeof data.nursery.eggProgress === 'number' ? data.nursery.eggProgress : 0
                   });
                 } else {
                   setNursery(null);
                 }
               }
-              if (data.marketOffers && Array.isArray(data.marketOffers)) setMarketOffers(data.marketOffers);
+              if (data.marketOffers && Array.isArray(data.marketOffers)) setMarketOffers(data.marketOffers.map((o: any) => ({ ...o, pokemon: migratePokemon(o.pokemon) })));
               if (data.globalBattleSpeed !== undefined) setGlobalBattleSpeed(data.globalBattleSpeed);
               if (data.activeEvent !== undefined) setActiveEvent(data.activeEvent);
               if (data.missions && Array.isArray(data.missions)) setMissions(data.missions);
@@ -16836,6 +24271,7 @@ export default function App() {
           }
         } catch (error) {
           console.error("Error loading from cloud:", error);
+          handleFirestoreError(error, OperationType.GET, `saves/${currentUser.uid}`);
         } finally {
           setIsCloudSyncing(false);
           setIsAuthReady(true);
@@ -16847,6 +24283,26 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Sync local state to useGameStore for multiplayer/friends
+  useEffect(() => {
+    useGameStore.getState().loadState({
+      coins,
+      stardust,
+      energy,
+      trainingPoints: tp,
+      bandages: banditas,
+      roster: collection.map(c => ({
+        ...c,
+        id: c.instanceId,
+        baseStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe },
+        currentStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe }
+      })),
+      activeTeamIds: team,
+      leagueLevel,
+      pokedex
+    });
+  }, [coins, stardust, energy, tp, banditas, collection, team, leagueLevel, pokedex]);
 
   // Missions & Events Logic
   const generateMissions = (type: MissionType) => {
@@ -17098,24 +24554,32 @@ export default function App() {
           const rand = Math.random();
           
           if (hasScout) {
-            if (rand < 0.15) rarity = 'Legendary';
-            else if (rand < 0.45) rarity = 'Mythical';
-            else if (rand < 0.8) rarity = 'Rare';
-            else rarity = 'Common';
+            if (rand < 0.05) rarity = 'Legendario';
+            else if (rand < 0.10) rarity = 'Singular (Mítico)';
+            else if (rand < 0.15) rarity = 'Ultraente';
+            else if (rand < 0.20) rarity = 'Pokémon Paradoja';
+            else if (rand < 0.35) rarity = 'Pseudo-legendario';
+            else if (rand < 0.55) rarity = 'Raro';
+            else if (rand < 0.80) rarity = 'Poco común';
+            else rarity = 'Común';
           } else {
-            if (rand < 0.05) rarity = 'Legendary';
-            else if (rand < 0.15) rarity = 'Mythical';
-            else if (rand < 0.4) rarity = 'Rare';
-            else rarity = 'Common';
+            if (rand < 0.01) rarity = 'Legendario';
+            else if (rand < 0.02) rarity = 'Singular (Mítico)';
+            else if (rand < 0.04) rarity = 'Ultraente';
+            else if (rand < 0.06) rarity = 'Pokémon Paradoja';
+            else if (rand < 0.12) rarity = 'Pseudo-legendario';
+            else if (rand < 0.30) rarity = 'Raro';
+            else if (rand < 0.60) rarity = 'Poco común';
+            else rarity = 'Común';
           }
 
           const base = getRandomBaseForLevel(targetLevel, rarity);
           const pokemon = await generatePokemon(base, rarity, targetLevel);
           
           // Make market pokemon expensive
-          const rarityMultiplier = rarity === 'Legendary' ? 10 : rarity === 'Mythical' ? 5 : rarity === 'Rare' ? 2 : 1;
+          const rarityMultiplier = rarity === 'Legendario' ? 10 : rarity === 'Singular (Mítico)' ? 5 : rarity === 'Pseudo-legendario' ? 4 : rarity === 'Raro' ? 2 : rarity === 'Poco común' ? 1.5 : 1;
           const shinyMultiplier = pokemon.isShiny ? 3 : 1;
-          const cost = (5000 * rarityMultiplier + Math.floor(Math.random() * 2000) + (targetLevel * 200)) * shinyMultiplier;
+          const cost = Math.floor((5000 * rarityMultiplier + Math.floor(Math.random() * 2000) + (targetLevel * 200)) * shinyMultiplier);
           
           const otherTeams = leagueTeams.filter(t => t.id !== 'player');
           const seller = otherTeams.length > 0 ? otherTeams[Math.floor(Math.random() * otherTeams.length)].name : 'Mercader Errante';
@@ -17226,18 +24690,18 @@ export default function App() {
     }
 
     try {
-      const starter = await generatePokemon(base, 'Common', 5); // Start at level 5
+      const starter = await generatePokemon(base, 'Común', 5); // Start at level 5
       
       // Generate 5 common Pokémon
       const commonPokemon = [];
       for (let i = 0; i < 5; i++) {
           const randomBase = POKEDEX_BASE[Math.floor(Math.random() * POKEDEX_BASE.length)];
-          commonPokemon.push(await generatePokemon(randomBase, 'Common', 5));
+          commonPokemon.push(await generatePokemon(randomBase, 'Común', 5));
       }
       
       // Generate 1 rare Pokémon
       const randomBaseRare = POKEDEX_BASE[Math.floor(Math.random() * POKEDEX_BASE.length)];
-      const rarePokemon = await generatePokemon(randomBaseRare, 'Rare', 5);
+      const rarePokemon = await generatePokemon(randomBaseRare, 'Raro', 5);
       
       const newCollection = [starter, ...commonPokemon, rarePokemon];
       
@@ -17269,7 +24733,7 @@ export default function App() {
     // Clear cloud save if user is logged in
     if (user) {
       try {
-        await deleteDoc(doc(db, 'saves', user.uid));
+        await deleteDoc(doc(getFirestore(), 'saves', user.uid));
       } catch (error) {
         console.error("Error deleting cloud save:", error);
       }
@@ -17375,12 +24839,23 @@ export default function App() {
           tutorialCompleted
         };
         
-        await setDoc(doc(db, 'saves', user.uid), sanitizeForFirestore({
+        await setDoc(doc(getFirestore(), 'saves', user.uid), sanitizeForFirestore({
           gameState: stateToSave,
           updatedAt: new Date().toISOString()
         }));
+
+        // Also update public user profile with progress
+        await setDoc(doc(getFirestore(), 'users', user.uid), {
+          progress: {
+            coins: stateToSave.coins,
+            leagueLevel: stateToSave.leagueLevel || 1,
+            pokedexCount: stateToSave.pokedex?.length || 0
+          },
+          updatedAt: Date.now()
+        }, { merge: true });
       } catch (error) {
         console.error("Error saving to cloud:", error);
+        handleFirestoreError(error, OperationType.WRITE, `saves/${user.uid}`);
       } finally {
         setIsCloudSyncing(false);
       }
@@ -17513,10 +24988,15 @@ export default function App() {
     setOpeningStage('shaking');
     
     const roll = Math.random();
-    let rarity: Rarity = 'Common';
-    if (roll < pack.odds.Legendary) rarity = 'Legendary';
-    else if (roll < pack.odds.Legendary + pack.odds.Mythical) rarity = 'Mythical';
-    else if (roll < pack.odds.Legendary + pack.odds.Mythical + pack.odds.Rare) rarity = 'Rare';
+    let rarity: Rarity = 'Común';
+    let cumulative = 0;
+    for (const [r, prob] of Object.entries(pack.odds)) {
+      cumulative += prob;
+      if (roll < cumulative) {
+        rarity = r as Rarity;
+        break;
+      }
+    }
     
     const base = getRandomBaseForLevel(1, rarity);
 
@@ -17740,7 +25220,7 @@ export default function App() {
 
     setTp(t => Math.max(0, t - TRAINING_COST_BASE));
     updateMissionProgress('train', 1);
-    if (target.rarity === 'Legendary') updateMissionProgress('level_legendary', 1);
+    if (target.rarity === 'Legendario' || target.rarity === 'Singular (Mítico)' || target.rarity === 'Ultraente' || target.rarity === 'Pokémon Paradoja') updateMissionProgress('level_legendary', 1);
     
     setCollection(prev => prev.map(p => {
       if (p.instanceId === instanceId && p.level < p.maxLevel) {
@@ -17913,7 +25393,7 @@ export default function App() {
           newP.ovr = Math.floor((newP.atk + newP.def + newP.spe + newP.hp/2) / 3.5);
           
           totalLevelsGained += levelsToGain;
-          if (p.rarity === 'Legendary') legendaryLevelsGained += levelsToGain;
+          if (p.rarity === 'Legendario' || p.rarity === 'Singular (Mítico)' || p.rarity === 'Ultraente' || p.rarity === 'Pokémon Paradoja') legendaryLevelsGained += levelsToGain;
           
           return newP;
         }
@@ -18003,6 +25483,7 @@ export default function App() {
     const evolvedPokemon: PokemonCard = {
       ...target,
       ...nextBase,
+      rarity: target.rarity,
       evolutionLevel: nextEvolutionLevel,
       powerLevel: 0,
       trainingLevel: 0,
@@ -18086,8 +25567,8 @@ export default function App() {
       
       const academyLevel = (facilities || []).find(f => f.id === 'academy')?.level || 1;
       const baseRarity = getPokemonRarity(base);
-      // For non-legendary/mythical, maintain the 20% chance of being Rare if it was Common
-      const rarity = (baseRarity === 'Common' && Math.random() > 0.8) ? 'Rare' : baseRarity;
+      // For non-legendary/mythical, maintain the 20% chance of being Poco común if it was Común
+      const rarity = (baseRarity === 'Común' && Math.random() > 0.8) ? 'Poco común' : baseRarity;
       
       const p = await generatePokemon(base, rarity, targetLevel, 1, academyLevel);
       
@@ -18676,10 +26157,12 @@ export default function App() {
         const newPokemonList: PokemonCard[] = [];
         for (let i = 0; i < 3; i++) {
           const roll = Math.random();
-          let rarity: Rarity = 'Common';
-          if (roll < 0.15) rarity = 'Legendary';
-          else if (roll < 0.45) rarity = 'Mythical';
-          else if (roll < 0.8) rarity = 'Rare';
+          let rarity: Rarity = 'Común';
+          if (roll < 0.15) rarity = 'Legendario';
+          else if (roll < 0.35) rarity = 'Singular (Mítico)';
+          else if (roll < 0.60) rarity = 'Pseudo-legendario';
+          else if (roll < 0.85) rarity = 'Raro';
+          else rarity = 'Poco común';
           
           const base = getRandomBaseForLevel(1, rarity);
           const newP = await generatePokemon(base, rarity, 1);
@@ -19574,6 +27057,8 @@ export default function App() {
                 { id: 'shop', icon: ShoppingBag, label: 'Tienda', color: 'rose' },
                 { id: 'market', icon: Store, label: 'Mercado', color: 'emerald' },
                 { id: 'battles', icon: Trophy, label: 'Combates', color: 'rose' },
+                { id: 'multiplayer', icon: Swords, label: 'Multijugador', color: 'rose' },
+                { id: 'friends', icon: UserPlus, label: 'Amigos', color: 'indigo' },
                 { id: 'league', icon: Building2, label: 'Liga Pokémon', color: 'amber' },
                 { id: 'pokedex', icon: Info, label: 'Pokédex', color: 'rose' },
                 { id: 'hallOfFame', icon: Award, label: 'Salón Fama', color: 'amber' },
@@ -19636,6 +27121,8 @@ export default function App() {
               { id: 'shop', icon: ShoppingBag, label: 'Tienda', color: 'rose' },
               { id: 'market', icon: Store, label: 'Mercado', color: 'emerald' },
               { id: 'battles', icon: Trophy, label: 'Combates', color: 'rose' },
+              { id: 'multiplayer', icon: Swords, label: 'Multijugador', color: 'rose' },
+              { id: 'friends', icon: UserPlus, label: 'Amigos', color: 'indigo' },
               { id: 'league', icon: Building2, label: 'Liga Pokémon', color: 'amber' },
               { id: 'pokedex', icon: Info, label: 'Pokédex', color: 'rose' },
               { id: 'hallOfFame', icon: Award, label: 'Salón Fama', color: 'amber' },
@@ -19945,7 +27432,7 @@ export default function App() {
                         <div className="w-48 h-48 bg-black/40 rounded-full flex items-center justify-center relative">
                           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent rounded-full" />
                           <img 
-                            src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${[1, 4, 7, 152, 155, 158, 252, 255, 258, 387, 390, 393, 495, 498, 501, 650, 653, 656, 722, 725, 728, 810, 813, 816, 906, 909, 912][starterIndex]}.png`}
+                            src={getPokemonImage({ id: [1, 4, 7, 152, 155, 158, 252, 255, 258, 387, 390, 393, 495, 498, 501, 650, 653, 656, 722, 725, 728, 810, 813, 816, 906, 909, 912][starterIndex] })}
                             alt={POKEDEX_BASE.find(p => p.id === [1, 4, 7, 152, 155, 158, 252, 255, 258, 387, 390, 393, 495, 498, 501, 650, 653, 656, 722, 725, 728, 810, 813, 816, 906, 909, 912][starterIndex])?.name}
                             className="w-40 h-40 object-contain relative z-10 drop-shadow-[0_0_20px_rgba(255,255,255,0.2)] group-hover:scale-110 transition-transform"
                             referrerPolicy="no-referrer"
@@ -20096,30 +27583,35 @@ export default function App() {
                     {/* Player Sprite (Left) */}
                     <div className="absolute left-[5%] md:left-[10%] bottom-[10%] md:bottom-[15%]">
                       <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-32 md:w-48 h-8 md:h-12 bg-black/30 rounded-[100%] blur-sm" />
-                      <AnimatePresence mode="wait">
+                      <AnimatePresence>
                         <motion.div
                           key={`player-sprite-${battleData.playerIdx}`}
                           initial={{ x: -300, opacity: 0 }}
                           animate={{ 
                             x: battleData.attackingSide === 'player' ? 100 : 0, 
-                            y: battleData.hitSide === 'player' ? [0, -15, 15, -15, 0] : [0, -8, 0],
                             opacity: 1, 
                             scale: window.innerWidth < 768 ? 1.1 : 1.5,
                             filter: battleData.hitSide === 'player' ? 'brightness(3) saturate(0)' : 'brightness(1) saturate(1)'
                           }}
-                          exit={{ x: -200, opacity: 0 }}
+                          exit={{ x: -200, opacity: 0, transition: { duration: 0.3 } }}
                           transition={{ 
-                            y: { duration: 3.5, repeat: Infinity, ease: "easeInOut" }
+                            x: { type: "spring", bounce: 0.4 },
+                            opacity: { duration: 0.3 }
                           }}
                           className="relative"
                         >
-                          {battleData.playerTeam[battleData.playerIdx]?.p && (
-                            <img 
-                              src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/${battleData.playerTeam[battleData.playerIdx].p.id}.png`}
-                              className="w-[180px] md:w-[280px] h-[180px] md:h-[280px] object-contain"
-                              referrerPolicy="no-referrer"
-                            />
-                          )}
+                          <motion.div
+                            animate={{ y: battleData.hitSide === 'player' ? [0, -15, 15, -15, 0] : [0, -8, 0] }}
+                            transition={{ y: { duration: 3.5, repeat: Infinity, ease: "easeInOut" } }}
+                          >
+                            {battleData.playerTeam[battleData.playerIdx]?.p && (
+                              <img 
+                                src={getPokemonImage(battleData.playerTeam[battleData.playerIdx].p, true)}
+                                className="w-[180px] md:w-[280px] h-[180px] md:h-[280px] object-contain"
+                                referrerPolicy="no-referrer"
+                              />
+                            )}
+                          </motion.div>
                         </motion.div>
                       </AnimatePresence>
                     </div>
@@ -20127,30 +27619,35 @@ export default function App() {
                     {/* Rival Sprite (Right) */}
                     <div className="absolute right-[10%] md:right-[15%] top-[20%] md:top-[25%]">
                       <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-24 md:w-40 h-6 md:h-10 bg-black/30 rounded-[100%] blur-sm" />
-                      <AnimatePresence mode="wait">
+                      <AnimatePresence>
                         <motion.div
                           key={`rival-sprite-${battleData.rivalIdx}`}
                           initial={{ x: 300, opacity: 0 }}
                           animate={{ 
                             x: battleData.attackingSide === 'rival' ? -100 : 0, 
-                            y: battleData.hitSide === 'rival' ? [0, -10, 10, -10, 0] : [0, -5, 0],
                             opacity: 1, 
                             scale: window.innerWidth < 768 ? 0.9 : 1.2,
                             filter: battleData.hitSide === 'rival' ? 'brightness(3) saturate(0)' : 'brightness(1) saturate(1)'
                           }}
-                          exit={{ x: 200, opacity: 0 }}
+                          exit={{ x: 200, opacity: 0, transition: { duration: 0.3 } }}
                           transition={{ 
-                            y: { duration: 3, repeat: Infinity, ease: "easeInOut" }
+                            x: { type: "spring", bounce: 0.4 },
+                            opacity: { duration: 0.3 }
                           }}
                           className="relative"
                         >
-                          {battleData.rivalTeam[battleData.rivalIdx]?.p && (
-                            <img 
-                              src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${battleData.rivalTeam[battleData.rivalIdx].p.id}.png`}
-                              className="w-[140px] md:w-[220px] h-[140px] md:h-[220px] object-contain"
-                              referrerPolicy="no-referrer"
-                            />
-                          )}
+                          <motion.div
+                            animate={{ y: battleData.hitSide === 'rival' ? [0, -10, 10, -10, 0] : [0, -5, 0] }}
+                            transition={{ y: { duration: 3, repeat: Infinity, ease: "easeInOut" } }}
+                          >
+                            {battleData.rivalTeam[battleData.rivalIdx]?.p && (
+                              <img 
+                                src={getPokemonImage(battleData.rivalTeam[battleData.rivalIdx].p, false, true)}
+                                className="w-[140px] md:w-[220px] h-[140px] md:h-[220px] object-contain"
+                                referrerPolicy="no-referrer"
+                              />
+                            )}
+                          </motion.div>
                         </motion.div>
                       </AnimatePresence>
                     </div>
@@ -20361,7 +27858,7 @@ export default function App() {
                               className={`flex items-center justify-between p-2 rounded-xl ${idx === battleData.playerIdx ? 'bg-zinc-200' : member.hp <= 0 ? 'bg-red-100 opacity-50' : 'bg-zinc-50 hover:bg-zinc-100'} transition-colors text-left`}
                             >
                               <div className="flex items-center gap-2">
-                                <img src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${member.p.id}.png`} className="w-8 h-8 object-contain" />
+                                <img src={getPokemonImage(member.p)} className="w-8 h-8 object-contain" />
                                 <div>
                                   <div className="font-bold text-[#303030] text-sm">{member.p.name}</div>
                                   <div className="text-[10px] text-[#303030]">Nv. {member.p.level}</div>
@@ -20492,7 +27989,7 @@ export default function App() {
                           <>
                             <div className={`absolute inset-0 bg-gradient-to-b ${getTypeGradient(teamMembers[i].types[0])} opacity-10`} />
                             <img 
-                              src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${teamMembers[i].id}.png`} 
+                              src={getPokemonImage(teamMembers[i])} 
                               alt="" 
                               className="w-full h-full object-contain group-hover:scale-125 transition-transform relative z-10 drop-shadow-2xl"
                               referrerPolicy="no-referrer"
@@ -21529,7 +29026,7 @@ export default function App() {
 
                       <div className="relative z-10">
                         <img 
-                          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
+                          src={getPokemonImage(p)} 
                           alt={p.name}
                           className="w-32 h-32 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] group-hover:scale-110 transition-transform"
                           referrerPolicy="no-referrer"
@@ -21766,7 +29263,7 @@ export default function App() {
                           <Heart size={10} className={p.happiness > 200 ? 'text-rose-500' : 'text-zinc-600'} fill={p.happiness > 200 ? 'currentColor' : 'none'} />
                         </div>
                         <img 
-                          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
+                          src={getPokemonImage(p)} 
                           alt={p.name}
                           className="w-16 h-16 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
                           referrerPolicy="no-referrer"
@@ -22320,6 +29817,50 @@ export default function App() {
             </motion.div>
           )}
 
+          {activeTab === 'multiplayer' && gameState === 'management' && (
+            <motion.div 
+              key="multiplayer"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="h-full"
+            >
+              <MultiplayerTab 
+                roster={collection.map(c => ({
+                  ...c,
+                  pokedexNumber: c.id,
+                  id: c.instanceId,
+                  baseStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe },
+                  currentStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe }
+                }))}
+                activeTeamIds={team}
+                onWin={() => setCoins(prev => prev + 5000)}
+              />
+            </motion.div>
+          )}
+
+          {activeTab === 'friends' && gameState === 'management' && (
+            <motion.div 
+              key="friends"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="h-full"
+            >
+              <FriendsTab 
+                setActiveTab={setActiveTab} 
+                roster={collection.map(c => ({
+                  ...c,
+                  pokedexNumber: c.id,
+                  id: c.instanceId,
+                  baseStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe },
+                  currentStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe }
+                }))}
+                activeTeamIds={team}
+              />
+            </motion.div>
+          )}
+
           {activeTab === 'lab' && gameState === 'management' && (
             <motion.div 
               key="lab"
@@ -22374,7 +29915,7 @@ export default function App() {
                         className={`p-3 rounded-2xl border transition-all flex items-center gap-3 ${selectedLabPokemonId === p.instanceId ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 border-white/5 hover:bg-zinc-800'}`}
                       >
                         <img 
-                          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
+                          src={getPokemonImage(p)} 
                           alt="" 
                           className="w-10 h-10 object-contain"
                           referrerPolicy="no-referrer"
@@ -22411,7 +29952,7 @@ export default function App() {
                             <div className={`aspect-square rounded-[24px] md:rounded-[32px] bg-gradient-to-br ${config.bg} border-2 ${config.border} flex items-center justify-center relative group`}>
                               <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-[22px] md:rounded-[30px]" />
                               <img 
-                                src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
+                                src={getPokemonImage(p)} 
                                 alt={p.name}
                                 className="w-48 h-48 md:w-64 md:h-64 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]"
                                 referrerPolicy="no-referrer"
@@ -22712,7 +30253,7 @@ export default function App() {
                     >
                       <div className="text-[8px] sm:text-[10px] font-bold text-zinc-600 mb-1 sm:mb-2">#{p.id.toString().padStart(3, '0')}</div>
                       <img 
-                        src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
+                        src={getPokemonImage(p)} 
                         alt="" 
                         className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
                         referrerPolicy="no-referrer"
@@ -22765,7 +30306,7 @@ export default function App() {
                       <div className="flex items-center gap-6 mb-8">
                         <div className="w-24 h-24 bg-black/40 rounded-full flex items-center justify-center relative">
                           <img 
-                            src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`}
+                            src={getPokemonImage(p)}
                             alt={p.name}
                             className="w-20 h-20 object-contain relative z-10 drop-shadow-[0_0_15px_rgba(255,215,0,0.4)]"
                             referrerPolicy="no-referrer"
@@ -23073,6 +30614,8 @@ export default function App() {
               { id: 'shop', icon: ShoppingBag, label: 'Tienda' },
               { id: 'market', icon: Store, label: 'Mercado' },
               { id: 'battles', icon: Trophy, label: 'Combates' },
+              { id: 'multiplayer', icon: Swords, label: 'Multi' },
+              { id: 'friends', icon: UserPlus, label: 'Amigos' },
               { id: 'pokedex', icon: Info, label: 'Pokedex' },
               { id: 'hallOfFame', icon: Award, label: 'Salón' },
             ].map((tab) => (
@@ -23149,7 +30692,7 @@ export default function App() {
                           className={`relative cursor-pointer rounded-2xl border-2 p-2 transition-all ${batchSelectedPokemon.includes(p.instanceId) ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5 bg-zinc-800/50 hover:border-white/20'}`}
                         >
                           <div className="flex items-center gap-3">
-                            <img src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} alt="" className="w-12 h-12 object-contain" referrerPolicy="no-referrer" />
+                            <img src={getPokemonImage(p)} alt="" className="w-12 h-12 object-contain" referrerPolicy="no-referrer" />
                             <div>
                               <div className="text-xs font-black uppercase truncate text-white">{p.name}</div>
                               <div className="text-[10px] font-bold text-zinc-500 uppercase">Nivel {p.level}/{p.maxLevel}</div>
@@ -23334,7 +30877,7 @@ export default function App() {
                     className="flex flex-col items-center gap-4"
                   >
                     <img 
-                      src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${evolvingPokemon.from.id}.png`} 
+                      src={getPokemonImage(evolvingPokemon.from)} 
                       alt="" 
                       className="w-48 h-48 object-contain"
                       referrerPolicy="no-referrer"
@@ -23362,7 +30905,7 @@ export default function App() {
                     className="flex flex-col items-center gap-4"
                   >
                     <img 
-                      src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${evolvingPokemon.to.id}.png`} 
+                      src={getPokemonImage({ ...evolvingPokemon.to, isShiny: evolvingPokemon.from.isShiny })} 
                       alt="" 
                       className="w-64 h-64 object-contain drop-shadow-[0_0_30px_rgba(244,63,94,0.6)]"
                       referrerPolicy="no-referrer"
@@ -23526,7 +31069,7 @@ export default function App() {
                       {teamMembers.map(p => (
                         <div key={p.instanceId} className="bg-black/40 rounded-xl p-2 border border-white/5 flex flex-col items-center">
                           <img 
-                            src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
+                            src={getPokemonImage(p)} 
                             className="w-12 h-12 object-contain"
                             referrerPolicy="no-referrer"
                           />
@@ -23576,7 +31119,7 @@ export default function App() {
                         {previewRivalTeam?.map((item, idx) => (
                           <div key={idx} className="bg-black/40 rounded-xl p-2 border border-white/5 flex flex-col items-center">
                             <img 
-                              src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${item.p.id}.png`} 
+                              src={getPokemonImage(item.p)} 
                               className="w-12 h-12 object-contain"
                               referrerPolicy="no-referrer"
                             />
@@ -23651,7 +31194,7 @@ export default function App() {
                 
                 <motion.img 
                   layoutId={`pokedex-img-${selectedPokedexPokemon.id}`}
-                  src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${selectedPokedexPokemon.id}.png`}
+                  src={getPokemonImage(selectedPokedexPokemon)}
                   className={`w-40 h-40 sm:w-56 sm:h-56 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.1)] ${!pokedex.includes(selectedPokedexPokemon.id) ? 'grayscale opacity-50' : ''}`}
                   referrerPolicy="no-referrer"
                 />
@@ -23672,8 +31215,8 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-6">
                     <div>
                       <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Tipo de Carta</div>
-                      <div className={`text-sm sm:text-base font-black uppercase ${RARITY_CONFIG[getRarity(selectedPokedexPokemon)].color}`}>
-                        {RARITY_CONFIG[getRarity(selectedPokedexPokemon)].label}
+                      <div className={`text-sm sm:text-base font-black uppercase ${RARITY_CONFIG[getPokemonRarity(selectedPokedexPokemon)].color}`}>
+                        {RARITY_CONFIG[getPokemonRarity(selectedPokedexPokemon)].label}
                       </div>
                     </div>
                     <div>
@@ -23736,7 +31279,7 @@ export default function App() {
                             <React.Fragment key={evId}>
                               <div className={`w-12 h-12 rounded-xl border flex items-center justify-center ${isCurrent ? 'border-indigo-500 bg-indigo-500/20' : 'border-white/5 bg-black/50'} ${!isUnlocked ? 'grayscale opacity-30' : ''}`}>
                                 <img 
-                                  src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${evId}.png`} 
+                                  src={getPokemonImage({ id: evId })} 
                                   className="w-10 h-10 object-contain"
                                   referrerPolicy="no-referrer"
                                 />
@@ -23989,7 +31532,7 @@ export default function App() {
 
                   <motion.img 
                     layoutId={`pokemon-img-${selectedPokemon.instanceId}`}
-                    src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${selectedPokemon.id}.png`}
+                    src={getPokemonImage(selectedPokemon)}
                     className={`w-36 h-36 sm:w-48 sm:h-48 md:w-64 md:h-64 object-contain relative z-10 drop-shadow-[0_0_50px_rgba(255,255,255,0.2)] ${selectedPokemon.isInjured ? 'grayscale opacity-50' : ''}`}
                     referrerPolicy="no-referrer"
                   />
@@ -24417,7 +31960,7 @@ export default function App() {
                     >
                       <div className="flex items-center gap-3">
                         <img 
-                          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${opt.id}.png`} 
+                          src={getPokemonImage({ id: opt.id, isShiny: pendingEvolution.pokemon.isShiny })} 
                           alt={nextBase.name} 
                           className="w-12 h-12" 
                           referrerPolicy="no-referrer"

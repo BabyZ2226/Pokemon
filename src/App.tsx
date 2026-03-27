@@ -88,7 +88,7 @@ interface Move {
   statusChance?: number;
 }
 
-interface PokemonBase {
+export interface PokemonBase {
   id: number;
   name: string;
   types: string[];
@@ -116,7 +116,7 @@ interface PokemonBase {
   }[];
 }
 
-interface PokemonCard extends PokemonBase {
+export interface PokemonCard extends PokemonBase {
   instanceId: string;
   rarity: Rarity;
   level: number;
@@ -23279,11 +23279,11 @@ const getPokemonRarity = (base: PokemonBase): Rarity => {
   return 'Común';
 };
 
-const calculateActualStat = (base: number, iv: number, ev: number, level: number, natureMod: number = 1) => {
+export const calculateActualStat = (base: number, iv: number, ev: number, level: number, natureMod: number = 1) => {
   return Math.floor((Math.floor((2 * base + iv + Math.floor(ev / 4)) * level / 100) + 5) * natureMod);
 };
 
-const calculateHp = (base: number, iv: number, ev: number, level: number) => {
+export const calculateHp = (base: number, iv: number, ev: number, level: number) => {
   if (base === 1) return 1; // Shedinja
   return Math.floor((2 * base + iv + Math.floor(ev / 4)) * level / 100) + level + 10;
 };
@@ -23993,6 +23993,7 @@ export default function App() {
   }, [collection, selectedPokemon]);
 
   const [isTournamentMode, setIsTournamentMode] = useState(() => localStorage.getItem('plm_isTournamentMode') === 'true');
+  const [isEnteringChampionship, setIsEnteringChampionship] = useState(false);
   const [tournamentPlayedThisSeason, setTournamentPlayedThisSeason] = useState(() => localStorage.getItem('plm_tournamentPlayedThisSeason') === 'true');
   const [isChampionshipTournament, setIsChampionshipTournament] = useState(() => localStorage.getItem('plm_isChampionshipTournament') === 'true');
   const [tournamentRule, setTournamentRule] = useState<string | null>(() => localStorage.getItem('plm_tournamentRule') || null);
@@ -24181,6 +24182,7 @@ export default function App() {
       setUser(currentUser);
       if (currentUser) {
         useGameStore.getState().setUid(currentUser.uid);
+        useGameStore.getState().setUserId(currentUser.uid);
         useGameStore.getState().setUserName(currentUser.displayName || 'Entrenador');
         
         // Create/Update user profile for friends system
@@ -26046,18 +26048,23 @@ export default function App() {
   };
 
   const startChampionshipTournament = () => {
-    const quarters: Match[] = [
-      { id: 'quarter-1', homeTeamId: 'player', awayTeamId: 'champ-1', played: false, week: 100 },
-      { id: 'quarter-2', homeTeamId: 'champ-2', awayTeamId: 'champ-3', played: false, week: 100 },
-      { id: 'quarter-3', homeTeamId: 'champ-4', awayTeamId: 'champ-5', played: false, week: 100 },
-      { id: 'quarter-4', homeTeamId: 'champ-6', awayTeamId: 'champ-7', played: false, week: 100 }
-    ];
+    setIsEnteringChampionship(true);
     
-    setTournamentRule('Normal');
-    setTournamentBracket({ quarters, semis: [], final: null, winner: null });
-    setIsTournamentMode(true);
-    setIsChampionshipTournament(true);
-    setHistory(prev => [`¡Comienza el Campeonato Final!`, ...prev].slice(0, 10));
+    setTimeout(() => {
+      const quarters: Match[] = [
+        { id: 'quarter-1', homeTeamId: 'player', awayTeamId: 'champ-1', played: false, week: 100 },
+        { id: 'quarter-2', homeTeamId: 'champ-2', awayTeamId: 'champ-3', played: false, week: 100 },
+        { id: 'quarter-3', homeTeamId: 'champ-4', awayTeamId: 'champ-5', played: false, week: 100 },
+        { id: 'quarter-4', homeTeamId: 'champ-6', awayTeamId: 'champ-7', played: false, week: 100 }
+      ];
+      
+      setTournamentRule('Normal');
+      setTournamentBracket({ quarters, semis: [], final: null, winner: null });
+      setIsTournamentMode(true);
+      setIsChampionshipTournament(true);
+      setHistory(prev => [`¡Comienza el Campeonato Final!`, ...prev].slice(0, 10));
+      setIsEnteringChampionship(false);
+    }, 2500); // 2.5 seconds epic animation
   };
 
   const simulateTournamentMatch = async (matchId: string, manualHomeGoals?: number, manualAwayGoals?: number) => {
@@ -29830,6 +29837,7 @@ export default function App() {
                   ...c,
                   pokedexNumber: c.id,
                   id: c.instanceId,
+                  sprite: getPokemonImage(c, false, true),
                   baseStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe },
                   currentStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe }
                 }))}

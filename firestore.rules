@@ -28,7 +28,40 @@ service cloud.firestore {
     //
     // Collection: rooms
     // Document ID: auto-generated
-    // ... (rest of the model)
+    // Fields:
+    //   - roomCode: string (required) - unique code for joining
+    //   - status: string (required) - 'waiting', 'playing', 'finished'
+    //   - player1: map (required) - { id, uid, name, team, activeIdx, hp }
+    //   - player2: map (optional) - { id, uid, name, team, activeIdx, hp }
+    //   - currentTurnId: string (required) - UID of the player whose turn it is
+    //   - logs: list (required) - battle log messages
+    //   - winnerId: string (optional) - UID of the winner
+    //   - updatedAt: timestamp (required)
+    //   - isPrivate: bool (optional)
+    //   - targetPlayerId: string (optional)
+    //
+    // Collection: matchmaking
+    // Document ID: userId
+    // Fields:
+    //   - userId: string (required)
+    //   - name: string (required)
+    //   - team: list (required)
+    //   - hp: list (required)
+    //   - createdAt: timestamp (required)
+    //   - matchedRoomId: string (optional)
+    //
+    // Collection: tournaments
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required)
+    //   - hostId: string (required)
+    //   - players: list (required) - array of { id, name, team }
+    //   - status: string (required) - 'waiting', 'semifinals', 'final', 'finished'
+    //   - matches: map (required) - { semi1, semi2, final }
+    //   - winnerId: string (optional) - UID of the winner
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
 
     // ===============================================================
     // Helper Functions
@@ -64,24 +97,34 @@ service cloud.firestore {
         && player.uid is string
         && player.name is string
         && player.team is list
-        && player.team.size() > 0
         && player.team.size() <= 6
         && player.activeIdx is number
         && player.hp is list;
     }
 
     function isValidRoom(data) {
-      let baseFields = ['status', 'player1', 'player2', 'currentTurnId', 'logs', 'winnerId', 'updatedAt'];
+      let baseFields = ['status', 'player1', 'currentTurnId', 'logs', 'updatedAt'];
       return data.keys().hasAll(baseFields)
         && data.status in ['waiting', 'playing', 'finished']
         && isValidPlayer(data.player1)
-        && (data.player2 == null || isValidPlayer(data.player2))
-        && data.currentTurnId is string
+        && (!('player2' in data) || data.player2 == null || isValidPlayer(data.player2))
+        && (!('currentTurnId' in data) || data.currentTurnId == null || data.currentTurnId is string)
         && data.logs is list
+        && (!('winnerId' in data) || data.winnerId == null || data.winnerId is string)
+        && data.updatedAt is number;
+    }
+
+    function isValidTournament(data) {
+      return data.keys().hasAll(['name', 'hostId', 'isPublic', 'mode', 'players', 'status', 'matches', 'winnerId', 'createdAt'])
+        && data.name is string
+        && data.hostId is string
+        && data.isPublic is bool
+        && data.mode in ['libre', 'competitivo']
+        && data.players is list
+        && data.status in ['waiting', 'semifinals', 'final', 'finished']
+        && data.matches is map
         && (data.winnerId == null || data.winnerId is string)
-        && data.updatedAt is number
-        && (!('isPrivate' in data) || data.isPrivate is bool)
-        && (!('targetPlayerId' in data) || data.targetPlayerId is string);
+        && data.createdAt is number;
     }
 
     // ===============================================================
@@ -108,41 +151,59 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.receiverId);
     }
 
+    match /matchmaking/{userId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isOwner(userId);
+      // Allow others to delete when they match
+      allow delete: if isAuthenticated(); 
+    }
+
+    match /tournaments/{tournamentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.hostId == request.auth.uid;
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && resource.data.hostId == request.auth.uid;
+    }
+
     match /rooms/{roomId} {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated() 
         && isValidRoom(request.resource.data)
         && request.resource.data.status == 'waiting'
-        && request.resource.data.player1.uid == request.auth.uid
-        && request.resource.data.player2 == null;
+        && request.resource.data.player1.uid == request.auth.uid;
 
       allow update: if isAuthenticated() 
         && isValidRoom(request.resource.data)
         && (
-          // 1. Joining a room
+          // 1. Player 2 joins the room
           (resource.data.status == 'waiting' 
-           && request.resource.data.status == 'playing'
+           && request.resource.data.status == 'waiting'
            && request.resource.data.player2 != null
-           && (
-             // Public room
-             (!('isPrivate' in resource.data) || resource.data.isPrivate == false)
-             ||
-             // Private room - must be the target
-             (resource.data.isPrivate == true && resource.data.targetPlayerId == request.auth.uid)
-           )
-           && request.resource.data.player2.uid == request.auth.uid
-           && request.resource.data.player1 == resource.data.player1)
+           && request.resource.data.player2.uid == request.auth.uid)
           ||
-          // 2. Playing the game
-          (resource.data.status == 'playing'
-           && (request.auth.uid == resource.data.player1.uid || request.auth.uid == resource.data.player2.uid)
-           && request.resource.data.player1.uid == resource.data.player1.uid
-           && request.resource.data.player2.uid == resource.data.player2.uid)
+          // 2. Player 1 or Player 2 updates their team/mode while waiting
+          (resource.data.status == 'waiting'
+           && request.resource.data.status == 'waiting'
+           && (request.auth.uid == resource.data.player1.uid || (resource.data.player2 != null && request.auth.uid == resource.data.player2.uid)))
+          ||
+          // 3. Player 1 starts the game or Quick Match
+          (resource.data.status == 'waiting'
+           && request.resource.data.status == 'playing'
+           && resource.data.player1.uid == request.auth.uid
+           && request.resource.data.player2 != null)
+          ||
+          // 4. Playing the game / Finishing
+          ((resource.data.status == 'playing' || resource.data.status == 'finished')
+           && (request.auth.uid == resource.data.player1.uid || (resource.data.player2 != null && request.auth.uid == resource.data.player2.uid)))
+          ||
+          // 5. Resetting a room (Host only)
+          (resource.data.status == 'finished'
+           && request.resource.data.status == 'waiting'
+           && resource.data.player1.uid == request.auth.uid)
         );
 
       allow delete: if isAuthenticated() 
-        && resource.data.status == 'waiting' 
         && resource.data.player1.uid == request.auth.uid;
     }
   }

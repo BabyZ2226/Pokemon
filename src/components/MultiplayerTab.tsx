@@ -1,1180 +1,809 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { PokemonInstance, Weather } from '../types';
-import { Swords, Users, Loader2, Trophy, Shield, Zap, Heart, Play, Pause, FastForward, Sparkles, X, Coins, Dumbbell, LogOut, Briefcase, LayoutGrid } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, limit, getDocs, addDoc, updateDoc, doc, deleteDoc, getFirestore, getDoc } from 'firebase/firestore';
-import { handleFirestoreError, OperationType } from '../utils/firestoreError';
+import { POKEDEX_BASE } from '../App';
+import { PokemonInstance, Move, PokemonType, StatName, StatusCondition, Tournament } from '../types';
 import { calculateActualStat } from '../utils/battleLogic';
+import { Users, Plus, Key, Play, Search, X, Check, Trophy, Zap } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import MultiplayerBattle from './MultiplayerBattle';
+import { getFirestore, collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 
-const getPokemonImage = (pokemon: any, isBack = false) => {
-  if (!pokemon) return '';
-  // Use pokedexNumber if available, fallback to id (which might be pokedex number in some cases)
-  const pokedexId = pokemon.pokedexNumber || (pokemon.p ? pokemon.p.pokedexNumber : null) || (pokemon.p ? pokemon.p.id : pokemon.id);
-  const isShiny = pokemon.p ? pokemon.p.isShiny : pokemon.isShiny;
-  
-  if (!pokedexId) return '';
-  // Use animated sprites from Gen 5 for better polish where available (Gen 1-5)
-  // For others, use high-quality official artwork for front and standard for back
-  const shinyStr = isShiny ? 'shiny/' : '';
-  
-  if (isBack) {
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/${shinyStr}${pokedexId}.png`;
-  }
-  
-  // Official artwork is much better for the opponent view
-  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokedexId}.png`;
-};
+interface MultiplayerTabProps {
+  roster?: PokemonInstance[];
+  activeTeamIds?: string[];
+  onWin?: () => void;
+}
 
-const getTypeColor = (type: string) => {
-  const colors: Record<string, string> = {
-    Fire: 'bg-orange-500',
-    Water: 'bg-blue-500',
-    Grass: 'bg-emerald-500',
-    Electric: 'bg-yellow-400',
-    Psychic: 'bg-purple-500',
-    Fighting: 'bg-red-600',
-    Dragon: 'bg-indigo-600',
-    Normal: 'bg-zinc-400',
-    Poison: 'bg-fuchsia-600',
-    Ground: 'bg-amber-700',
-    Rock: 'bg-stone-500',
-    Bug: 'bg-lime-500',
-    Ghost: 'bg-violet-800',
-    Steel: 'bg-slate-400',
-    Ice: 'bg-cyan-300',
-    Fairy: 'bg-pink-300',
-    Dark: 'bg-zinc-800',
-  };
-  return colors[type] || 'bg-zinc-400';
-};
+const MultiplayerTab: React.FC<MultiplayerTabProps> = ({ roster: propsRoster, activeTeamIds: propsActiveTeamIds, onWin }) => {
+  const { 
+    userId, 
+    userName, 
+    currentRoom, 
+    currentTournament,
+    createMultiplayerRoom, 
+    joinMultiplayerRoomByCode, 
+    leaveRoom,
+    leaveTournament,
+    deleteTournament,
+    setRoomMode,
+    startMultiplayerGame,
+    findQuickMatch,
+    cancelQuickMatch,
+    isSearchingMatch,
+    createTournament,
+    joinTournament,
+    playTournamentMatch,
+    roster: storeRoster,
+    activeTeamIds: storeActiveTeamIds
+  } = useGameStore();
 
-const getTypeGradient = (type: string) => {
-  const colors: Record<string, string> = {
-    Fire: 'from-orange-500 to-orange-600',
-    Water: 'from-blue-500 to-blue-600',
-    Grass: 'from-emerald-500 to-emerald-600',
-    Electric: 'from-yellow-400 to-yellow-500',
-    Psychic: 'from-purple-500 to-purple-600',
-    Fighting: 'from-red-600 to-red-700',
-    Dragon: 'from-indigo-600 to-indigo-700',
-    Normal: 'from-zinc-400 to-zinc-500',
-    Poison: 'from-fuchsia-600 to-fuchsia-700',
-    Ground: 'from-amber-700 to-amber-800',
-    Rock: 'from-stone-500 to-stone-600',
-    Bug: 'from-lime-500 to-lime-600',
-    Ghost: 'from-violet-800 to-violet-900',
-    Steel: 'from-slate-400 to-slate-500',
-    Ice: 'from-cyan-300 to-cyan-400',
-    Fairy: 'from-pink-300 to-pink-400',
-    Dark: 'from-zinc-800 to-zinc-900',
-  };
-  return colors[type] || 'from-zinc-400 to-zinc-500';
-};
+  const roster = propsRoster || storeRoster;
+  const activeTeamIds = propsActiveTeamIds || storeActiveTeamIds;
 
-export default function MultiplayerTab({ roster: propRoster, activeTeamIds: propActiveTeamIds, onWin }: { roster?: any[], activeTeamIds?: string[], onWin?: () => void }) {
-  const store = useGameStore();
-  const roster = propRoster || store.roster;
-  const activeTeamIds = propActiveTeamIds || store.activeTeamIds;
-  const { addCoins, userId, uid, userName, currentRoom, subscribeToRoom, leaveRoom, submitMultiplayerMove, switchMultiplayerPokemon, useMultiplayerItem, inventory } = store;
-  
-  const [chatMessage, setChatMessage] = useState('');
-  const logEndRef = useRef<HTMLDivElement>(null);
-  const [animState, setAnimState] = useState<{
-    attacker: 'me' | 'opponent' | null;
-    defender: 'me' | 'opponent' | null;
-    lastMove: string | null;
-  }>({ attacker: null, defender: null, lastMove: null });
-  const [showVS, setShowVS] = useState(false);
-  const [showMoves, setShowMoves] = useState(false);
-  const [showPokemon, setShowPokemon] = useState(false);
-  const [showBag, setShowBag] = useState(false);
-  const [battleBackground, setBattleBackground] = useState<string>('https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=1920&q=80');
-  const prevStatus = useRef<string | null>(null);
-
-  const prevLogsLength = useRef(currentRoom?.logs.length || 0);
-  const hasInitializedLogs = useRef(false);
-  const lastProcessedLogIdx = useRef(-1);
-  const animTimeouts = useRef<NodeJS.Timeout[]>([]);
-  const lastFaintedId = useRef<string | null>(null);
-
-  const clearAnimTimeouts = () => {
-    animTimeouts.current.forEach(clearTimeout);
-    animTimeouts.current = [];
-  };
-
-  useEffect(() => {
-    return () => clearAnimTimeouts();
-  }, []);
-
-  const playerTeam = React.useMemo(() => roster.filter(p => activeTeamIds.includes(p.id)), [roster, activeTeamIds]);
-
-  const isPlayer1 = currentRoom?.player1?.id === userId;
-  const me = isPlayer1 ? currentRoom?.player1 : currentRoom?.player2;
-  const opponent = isPlayer1 ? currentRoom?.player2 : currentRoom?.player1;
-  const activeP = me && me.team ? me.team[me.activeIdx] : null;
-  const activeO = opponent && opponent.team ? opponent.team[opponent.activeIdx] : null;
-  const isWaiting = currentRoom?.currentTurnId !== userId && currentRoom?.status !== 'finished';
-
-  useEffect(() => {
-    if (currentRoom?.status === 'playing' && !battleBackground.startsWith('data:')) {
-      import('../utils/gemini').then(({ generateBattleBackground }) => {
-        generateBattleBackground().then(setBattleBackground);
-      });
-    }
-  }, [currentRoom?.status]);
-
-  // Reset showMoves when it's no longer our turn
-  useEffect(() => {
-    if (isWaiting) {
-      setShowMoves(false);
-      setShowPokemon(false);
-      setShowBag(false);
-    }
-  }, [isWaiting]);
-
-  useEffect(() => {
-    setAnimState({ attacker: null, defender: null, lastMove: null });
-    clearAnimTimeouts();
-  }, [activeP?.id, activeO?.id]);
-
-  useEffect(() => {
-    if (!currentRoom) return;
-
-    // Initialize logs length on first room load to avoid playing old animations
-    if (!hasInitializedLogs.current && currentRoom.logs.length > 0) {
-      prevLogsLength.current = currentRoom.logs.length;
-      lastProcessedLogIdx.current = currentRoom.logs.length - 1;
-      hasInitializedLogs.current = true;
-      return;
-    }
-
-    if (currentRoom.status === 'playing' && prevStatus.current !== 'playing') {
-      setShowVS(true);
-      setTimeout(() => setShowVS(false), 3000);
-    }
-    prevStatus.current = currentRoom.status;
-    
-    if (currentRoom.logs.length > 0 && lastProcessedLogIdx.current < currentRoom.logs.length - 1) {
-      const lastLog = currentRoom.logs[currentRoom.logs.length - 1];
-      lastProcessedLogIdx.current = currentRoom.logs.length - 1;
-      
-      if (lastLog.includes('usa')) {
-        const parts = lastLog.split(': ¡');
-        if (parts.length > 1) {
-          const trainerName = parts[0];
-          const movePart = parts[1].split(', usa ')[1].split('!')[0];
-          
-          const isMeAttacking = trainerName === userName;
-          
-          clearAnimTimeouts();
-          setAnimState({
-            attacker: isMeAttacking ? 'me' : 'opponent',
-            defender: null,
-            lastMove: movePart
-          });
-
-          // Sequence: Attack -> Damage -> Clear
-          const t1 = setTimeout(() => {
-            setAnimState(prev => ({ ...prev, attacker: null, defender: isMeAttacking ? 'opponent' : 'me' }));
-            const t2 = setTimeout(() => {
-              setAnimState({ attacker: null, defender: null, lastMove: null });
-            }, 600);
-            animTimeouts.current.push(t2);
-          }, 500);
-          animTimeouts.current.push(t1);
-        }
-      } else if (lastLog.includes('se ha debilitado')) {
-        const pokemonName = lastLog.split('¡')[1].split(' se ha debilitado')[0];
-        const isMeFainting = activeP && pokemonName === activeP.name;
-        
-        clearAnimTimeouts();
-        setAnimState({
-          attacker: null,
-          defender: isMeFainting ? 'me' : 'opponent',
-          lastMove: '¡DEBILITADO!'
-        });
-        
-        const t3 = setTimeout(() => {
-          setAnimState({ attacker: null, defender: null, lastMove: null });
-        }, 1500);
-        animTimeouts.current.push(t3);
-      } else if (lastLog.includes('retira a') || lastLog.includes('Adelante')) {
-        clearAnimTimeouts();
-        setAnimState({ attacker: null, defender: null, lastMove: null });
-      }
-      
-      prevLogsLength.current = currentRoom.logs.length;
-    }
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [currentRoom?.logs, userName, activeP?.name, activeO?.name]);
-
-  // Auto-open pokemon menu when active pokemon faints
-  useEffect(() => {
-    if (me && activeP && me.hp[me.activeIdx] <= 0 && currentRoom?.status === 'playing' && currentRoom.currentTurnId === userId) {
-      if (lastFaintedId.current !== activeP.id) {
-        setShowPokemon(true);
-        lastFaintedId.current = activeP.id;
-      }
-    } else if (activeP && me && me.hp[me.activeIdx] > 0) {
-      lastFaintedId.current = null;
-    }
-  }, [me?.hp[me?.activeIdx], activeP?.id, currentRoom?.status, currentRoom?.currentTurnId, userId]);
-
-  const [gameMode, setGameMode] = useState<'competitive' | 'free'>('competitive');
   const [roomCode, setRoomCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<'Competitive' | 'Free' | null>(null);
+  const [freeModeTeam, setFreeModeTeam] = useState<PokemonInstance[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSelectingPokemon, setIsSelectingPokemon] = useState(false);
+  const [matchError, setMatchError] = useState<string | null>(null);
 
-  const handleRoomAction = async () => {
-    if (roomCode) {
-      // Join existing room
-      try {
-        const roomDoc = await getDoc(doc(getFirestore(), 'rooms', roomCode));
-        if (!roomDoc.exists()) {
-          alert('Sala no encontrada');
-          return;
+  const handlePlayMatch = async (matchId: 'semi1' | 'semi2' | 'final') => {
+    try {
+      setMatchError(null);
+      await playTournamentMatch(matchId);
+    } catch (error: any) {
+      setMatchError(error.message);
+      setTimeout(() => setMatchError(null), 3000);
+    }
+  };
+
+  // Sync team with store when mode is set or changed
+  useEffect(() => {
+    if (currentRoom && currentRoom.status === 'waiting') {
+      const isPlayer1 = currentRoom.player1.id === userId;
+      const me = isPlayer1 ? currentRoom.player1 : currentRoom.player2;
+      
+      if (me) {
+        let teamToSync: PokemonInstance[] = [];
+        if (currentRoom.mode === 'Competitive') {
+          teamToSync = activeTeamIds.map(id => roster.find(p => p.id === id)!).filter(Boolean);
+        } else if (currentRoom.mode === 'Free') {
+          teamToSync = freeModeTeam;
         }
-        const data = roomDoc.data();
-        if (data.status !== 'waiting') {
-          alert('La sala ya está llena o el combate ha comenzado');
-          return;
-        }
-        
-        const myPlayer = {
-          id: userId,
-          uid: uid || 'anonymous',
-          name: userName,
-          team: playerTeam,
-          activeIdx: 0,
-          hp: playerTeam.map(p => calculateActualStat(p, 'hp'))
-        };
 
-        await updateDoc(doc(getFirestore(), 'rooms', roomCode), {
-          status: 'playing',
-          player2: myPlayer,
-          currentTurnId: data.player1.id,
-          logs: [...data.logs, `¡Combate iniciado contra ${userName}!`],
-          updatedAt: Date.now()
-        });
-        subscribeToRoom(roomCode, userId);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}`);
-      }
-    } else {
-      // Create new room
-      try {
-        const roomsRef = collection(getFirestore(), 'rooms');
-        const newRoom = {
-          status: 'waiting',
-          player1: {
-            id: userId,
-            uid: uid || 'anonymous',
-            name: userName,
-            team: playerTeam,
-            activeIdx: 0,
-            hp: playerTeam.map(p => calculateActualStat(p, 'hp'))
-          },
-          player2: null,
-          currentTurnId: userId,
-          logs: ['¡Esperando oponente...'],
-          winnerId: null,
-          updatedAt: Date.now(),
-          isPrivate: false,
-          gameMode: gameMode
-        };
-        const docRef = await addDoc(roomsRef, newRoom);
-        subscribeToRoom(docRef.id, userId);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, 'rooms');
-      }
-    }
-  };
-
-  // ... (dentro del JSX de MultiplayerTab)
-  {!currentRoom && (
-    <div className="flex flex-col gap-4 p-6 bg-zinc-900 rounded-3xl border border-white/10">
-      <h3 className="text-xl font-black text-white uppercase">Nueva Partida</h3>
-      <div className="flex gap-4">
-        <button 
-          onClick={() => setGameMode('competitive')}
-          className={`flex-1 p-4 rounded-xl border ${gameMode === 'competitive' ? 'bg-indigo-600 border-indigo-500' : 'bg-zinc-800 border-white/5'}`}
-        >
-          Competitivo
-        </button>
-        <button 
-          onClick={() => setGameMode('free')}
-          className={`flex-1 p-4 rounded-xl border ${gameMode === 'free' ? 'bg-indigo-600 border-indigo-500' : 'bg-zinc-800 border-white/5'}`}
-        >
-          Libre
-        </button>
-      </div>
-      <input 
-        type="text" 
-        placeholder="Código de sala (opcional)" 
-        value={roomCode}
-        onChange={(e) => setRoomCode(e.target.value)}
-        className="p-4 rounded-xl bg-black/40 border border-white/10 text-white"
-      />
-      <button 
-        onClick={handleRoomAction}
-        className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase rounded-xl"
-      >
-        {roomCode ? 'Unirse a sala' : 'Crear sala'}
-      </button>
-    </div>
-  )}
-
-
-  const cancelSearch = async () => {
-    try {
-      if (currentRoom && currentRoom.status === 'waiting' && currentRoom.player1.id === userId) {
-        await deleteDoc(doc(getFirestore(), 'rooms', currentRoom.id!));
-      }
-      leaveRoom();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `rooms/${currentRoom?.id}`);
-    }
-  };
-
-  const submitMove = (move: any) => {
-    submitMultiplayerMove(move);
-  };
-
-  const sendChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentRoom || !chatMessage.trim()) return;
-    try {
-      const newLogs = [...currentRoom.logs, `${userName}: ${chatMessage}`];
-      await updateDoc(doc(getFirestore(), 'rooms', currentRoom.id!), { logs: newLogs });
-      setChatMessage('');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `rooms/${currentRoom.id}`);
-    }
-  };
-
-  const handleFinish = () => {
-    if (currentRoom?.winnerId === userId) {
-      if (onWin) onWin();
-      addCoins(5000);
-    }
-    leaveRoom();
-  };
-
-  const handleSurrender = async () => {
-    if (!currentRoom) return;
-    const roomId = currentRoom.id;
-    try {
-      const opponentId = currentRoom.player1.id === userId ? currentRoom.player2?.id : currentRoom.player1.id;
-      await updateDoc(doc(getFirestore(), 'rooms', roomId!), {
-        status: 'finished',
-        winnerId: opponentId,
-        logs: [...currentRoom.logs, `¡${userName} ha huido del combate!`]
-      });
-    } catch (error) {
-      console.error("Error surrendering:", error);
-    } finally {
-      leaveRoom();
-    }
-  };
-
-  if (currentRoom && (currentRoom.status === 'playing' || currentRoom.status === 'finished') && me && opponent && activeP && activeO) {
-    return (
-      <motion.div
-        key="multiplayer-battle"
-        initial={{ opacity: 0, scale: 1.1 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="fixed inset-0 z-[100] bg-zinc-950 flex flex-col"
-      >
-        {/* VS Screen Overlay */}
-        <AnimatePresence>
-          {showVS && opponent && activeP && activeO && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 overflow-hidden"
-            >
-              <motion.div
-                initial={{ x: -500, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ type: "spring", damping: 12 }}
-                className="absolute left-0 w-1/2 h-full flex flex-col items-center justify-center bg-blue-900/20"
-              >
-                <img 
-                  src={getPokemonImage(activeP, true)} 
-                  alt={activeP?.name || 'Pokemon'} 
-                  className="w-64 h-64 object-contain drop-shadow-[0_0_30px_rgba(59,130,246,0.5)]"
-                  referrerPolicy="no-referrer"
-                />
-                <h2 className="text-4xl font-black text-blue-400 italic mt-4 uppercase tracking-tighter">{userName}</h2>
-              </motion.div>
-
-              <motion.div
-                initial={{ scale: 5, opacity: 0, rotate: -45 }}
-                animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                transition={{ delay: 0.5, type: "spring" }}
-                className="z-10 bg-white text-black font-black text-8xl px-8 py-4 italic skew-x-[-12deg] shadow-[0_0_50px_rgba(255,255,255,0.5)]"
-              >
-                VS
-              </motion.div>
-
-              <motion.div
-                initial={{ x: 500, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ type: "spring", damping: 12 }}
-                className="absolute right-0 w-1/2 h-full flex flex-col items-center justify-center bg-red-900/20"
-              >
-                <img 
-                  src={getPokemonImage(activeO, false)} 
-                  alt={activeO?.name || 'Pokemon'} 
-                  className="w-64 h-64 object-contain drop-shadow-[0_0_30px_rgba(239,68,68,0.5)]"
-                  referrerPolicy="no-referrer"
-                />
-                <h2 className="text-4xl font-black text-red-400 italic mt-4 uppercase tracking-tighter">{opponent?.name || 'Rival'}</h2>
-              </motion.div>
-
-              {/* Background elements */}
-              <motion.div 
-                animate={{ rotate: 360 }}
-                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                className="absolute inset-0 opacity-10 pointer-events-none"
-                style={{ background: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '40px 40px' }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* VS Screen Overlay */}
-        <AnimatePresence>
-          {showVS && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-[100] bg-black flex items-center justify-center overflow-hidden"
-            >
-              <motion.div 
-                initial={{ x: -500, skewX: -20 }}
-                animate={{ x: 0, skewX: -20 }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                className="absolute left-0 w-full h-full bg-indigo-600/20 border-r-8 border-indigo-500"
-              />
-              <motion.div 
-                initial={{ x: 500, skewX: -20 }}
-                animate={{ x: 0, skewX: -20 }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                className="absolute right-0 w-full h-full bg-rose-600/20 border-l-8 border-rose-500"
-              />
-              
-              <div className="relative flex flex-col items-center gap-8 md:gap-16 z-10">
-                <motion.div
-                  initial={{ scale: 0, rotate: -20 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", damping: 12 }}
-                  className="flex flex-col items-center gap-4"
-                >
-                  <div className="w-24 h-24 md:w-48 md:h-48 bg-indigo-500 rounded-full border-8 border-white shadow-[0_0_50px_rgba(99,102,241,0.5)] flex items-center justify-center">
-                    <Users size={48} className="md:size-96 text-white" />
-                  </div>
-                  <span className="text-2xl md:text-5xl font-black text-white uppercase italic tracking-tighter drop-shadow-lg">{me?.name}</span>
-                </motion.div>
-
-                <motion.div
-                  initial={{ scale: 2, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="text-6xl md:text-9xl font-black text-white italic tracking-tighter drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]"
-                >
-                  VS
-                </motion.div>
-
-                <motion.div
-                  initial={{ scale: 0, rotate: 20 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", damping: 12, delay: 0.2 }}
-                  className="flex flex-col items-center gap-4"
-                >
-                  <div className="w-24 h-24 md:w-48 md:h-48 bg-rose-500 rounded-full border-8 border-white shadow-[0_0_50px_rgba(244,63,94,0.5)] flex items-center justify-center">
-                    <Shield size={48} className="md:size-96 text-white" />
-                  </div>
-                  <span className="text-2xl md:text-5xl font-black text-white uppercase italic tracking-tighter drop-shadow-lg">{opponent?.name}</span>
-                </motion.div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Turn Banner */}
-        <AnimatePresence>
-          {!isWaiting && currentRoom.status === 'playing' && !showVS && (
-            <motion.div
-              initial={{ x: -100, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 100, opacity: 0 }}
-              className="absolute top-20 left-4 z-40 pointer-events-none"
-            >
-              <div className="bg-emerald-500/20 backdrop-blur-md border border-emerald-500/30 px-4 py-2 rounded-xl flex items-center gap-3 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-sm font-black text-emerald-400 uppercase tracking-widest italic">Tu Turno</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Move Name Pop-up */}
-        <AnimatePresence>
-          {animState.lastMove && (
-            <motion.div
-              key={animState.lastMove}
-              initial={{ scale: 0, opacity: 0, y: 50 }}
-              animate={{ scale: 1.2, opacity: 1, y: 0 }}
-              exit={{ scale: 1.5, opacity: 0, y: -50 }}
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none"
-            >
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-4 rounded-full border-4 border-white shadow-[0_0_50px_rgba(99,102,241,0.8)]">
-                <span className="text-2xl md:text-4xl font-black text-white uppercase italic tracking-tighter whitespace-nowrap drop-shadow-lg">
-                  {animState.lastMove}
-                </span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        {/* Battle Header */}
-        <div className="h-14 md:h-16 border-b border-white/5 bg-zinc-900 flex items-center justify-between px-3 md:px-6">
-          <div className="flex items-center gap-2 md:gap-4">
-            <div className="flex items-center gap-1 md:gap-2">
-              <span className="text-lg md:text-xl">🏆</span>
-              <span className="text-[10px] md:text-sm font-black italic uppercase hidden sm:block">{me?.name || 'Jugador'}</span>
-            </div>
-            <span className="text-zinc-600 font-black italic text-xs md:text-base">VS</span>
-            <div className="flex items-center gap-1 md:gap-2">
-              <span className="text-[10px] md:text-sm font-black italic uppercase hidden sm:block">{opponent?.name || 'Rival'}</span>
-              <span className="text-lg md:text-xl">⚔️</span>
-            </div>
-          </div>
+        if (teamToSync.length > 0) {
+          const hp = teamToSync.map(p => calculateActualStat(p, 'hp'));
+          // Only sync if the team is different to avoid infinite loops
+          const currentTeamIds = me.team.map(p => p.id).join(',');
+          const newTeamIds = teamToSync.map(p => p.id).join(',');
           
-          <div className="flex items-center gap-2 md:gap-4">
-            <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-2xl border border-white/10">
-              <div className={`w-2 h-2 rounded-full ${isWaiting ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
-              <span className="text-xs font-black text-white uppercase tracking-widest">
-                {currentRoom.status === 'finished' ? 'Finalizado' : (isWaiting ? 'Esperando...' : 'Tu Turno')}
-              </span>
-            </div>
+          if (currentTeamIds !== newTeamIds) {
+            useGameStore.getState().updateMultiplayerTeam(teamToSync, hp);
+          }
+        }
+      }
+    }
+  }, [currentRoom?.mode, freeModeTeam, activeTeamIds, currentRoom?.status, currentRoom?.id]);
+
+  const [isCreatingTournament, setIsCreatingTournament] = useState(false);
+  const [tournamentName, setTournamentName] = useState('');
+  const [tournamentIsPublic, setTournamentIsPublic] = useState(true);
+  const [tournamentMode, setTournamentMode] = useState<'libre' | 'competitivo'>('libre');
+  const [activeTournaments, setActiveTournaments] = useState<Tournament[]>([]);
+
+  useEffect(() => {
+    const db = getFirestore();
+    const q = query(
+      collection(db, 'tournaments'),
+      where('status', '==', 'waiting'),
+      where('isPublic', '==', true),
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tournaments: Tournament[] = [];
+      snapshot.forEach((doc) => {
+        tournaments.push({ id: doc.id, ...doc.data() } as Tournament);
+      });
+      setActiveTournaments(tournaments);
+    }, (error) => {
+      console.error("Error fetching tournaments:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Tournament View
+  if (currentTournament) {
+    const isHost = currentTournament.hostId === userId;
+
+    return (
+      <div className="flex flex-col h-full bg-zinc-950 p-8 overflow-y-auto">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">{currentTournament.name}</h2>
+            <p className="text-zinc-500 font-mono text-sm uppercase tracking-widest">Torneo de 4 Jugadores</p>
+          </div>
+          <div className="flex gap-4">
+            {isHost && (
+              <button 
+                onClick={() => deleteTournament(currentTournament.id)}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all font-bold uppercase italic text-xs"
+              >
+                Eliminar Torneo
+              </button>
+            )}
             <button 
-              onClick={leaveRoom}
-              className="p-2 bg-white/5 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 rounded-xl border border-white/10 transition-all"
-              title="Forzar Salida"
+              onClick={leaveTournament}
+              className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg hover:bg-red-500/20 transition-all font-bold uppercase italic text-xs"
             >
-              <LogOut size={16} />
+              Salir del Torneo
             </button>
           </div>
         </div>
 
-        {/* Battle Arena */}
-        <div className="flex-1 relative overflow-hidden flex flex-col items-center justify-center">
-          <div 
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000"
-            style={{ 
-              backgroundImage: `url('${battleBackground}')`,
-              filter: animState.defender ? 'contrast(1.2) brightness(0.8)' : 'none'
-            }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60" />
-            
-            {/* Dynamic Particles/Sparkles */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              {[...Array(10)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 100 }}
-                  animate={{ 
-                    opacity: [0, 0.5, 0],
-                    y: -100,
-                    x: Math.random() * 200 - 100
-                  }}
-                  transition={{ 
-                    duration: 3 + Math.random() * 2,
-                    repeat: Infinity,
-                    delay: Math.random() * 5
-                  }}
-                  className="absolute bottom-0 left-1/2 w-1 h-1 bg-white rounded-full blur-[1px]"
-                  style={{ left: `${Math.random() * 100}%` }}
-                />
-              ))}
-            </div>
-          </div>
-          
-          {/* Visual Effects Layer */}
-          <AnimatePresence>
-            {currentRoom.currentTurnId !== userId && currentRoom.status === 'playing' && opponent && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-black/60 backdrop-blur-md px-6 py-2 rounded-full border border-white/10 flex items-center gap-3"
-              >
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                <span className="text-white font-bold text-sm uppercase tracking-widest">Esperando a {opponent?.name || 'Rival'}...</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="w-full h-full relative z-10 flex flex-col">
-            {/* UI Layer - Top Row: Opponent Stats (Top Left) */}
-            <div className="p-4 md:p-8 flex justify-start z-30">
-              <AnimatePresence mode="wait">
-                {activeO && (
-                  <motion.div 
-                    key={activeO.id}
-                    initial={{ x: -100, opacity: 0 }}
-                    animate={{ 
-                      x: 0, 
-                      opacity: 1,
-                      scale: animState.defender === 'opponent' ? [1, 1.05, 1] : 1,
-                      rotate: animState.defender === 'opponent' ? [-1, 1, -1, 1, 0] : 0
-                    }}
-                    exit={{ x: -100, opacity: 0, transition: { duration: 0.3 } }}
-                    className="bg-white/20 backdrop-blur-xl border border-white/20 p-2 md:p-3 w-56 md:w-80 shadow-2xl relative overflow-hidden rounded-r-3xl"
-                    style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}
-                  >
-                    <div className="pr-8">
-                      <div className="flex justify-between items-center mb-1">
-                        <div className="flex items-center gap-1 md:gap-2">
-                          <span className="text-sm md:text-xl font-black text-white uppercase tracking-tight truncate drop-shadow-md">{activeO?.name || 'Pokemon'}</span>
-                          <span className="text-blue-400 font-bold text-xs md:text-sm">♂</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8">
+            <h3 className="text-xl font-bold text-white mb-6 uppercase italic tracking-tight">Participantes ({currentTournament.players.length}/4)</h3>
+            <div className="space-y-4">
+              {[0, 1, 2, 3].map(i => {
+                const p = currentTournament.players[i];
+                return (
+                  <div key={i} className="flex items-center justify-between p-4 bg-zinc-950 border border-zinc-800 rounded-2xl">
+                    {p ? (
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
+                          <Users className="w-5 h-5 text-blue-400" />
                         </div>
-                        <span className="text-[10px] md:text-lg font-bold text-white/80 italic">Lv{activeO?.level || 1}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="bg-orange-500 text-[8px] md:text-[10px] font-black text-white px-1 rounded-sm leading-none py-0.5 shadow-sm">HP</div>
-                        <div className="flex-1 h-2 md:h-3 bg-black/40 rounded-full overflow-hidden p-[1px] md:p-[2px] border border-white/10 relative">
-                          {/* Ghost Bar (Damage taken effect) */}
-                          <motion.div 
-                            animate={{ 
-                              width: `${activeO ? (opponent.hp[opponent.activeIdx] / calculateActualStat(activeO, 'hp')) * 100 : 0}%`
-                            }}
-                            transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
-                            className="absolute inset-0 bg-white/40 rounded-full"
-                          />
-                          {/* Main HP Bar */}
-                          <motion.div 
-                            animate={{ 
-                              width: `${activeO ? (opponent.hp[opponent.activeIdx] / calculateActualStat(activeO, 'hp')) * 100 : 0}%`,
-                              backgroundColor: activeO && (opponent.hp[opponent.activeIdx] / calculateActualStat(activeO, 'hp')) < 0.2 ? '#f43f5e' : 
-                                             activeO && (opponent.hp[opponent.activeIdx] / calculateActualStat(activeO, 'hp')) < 0.5 ? '#f59e0b' : '#10b981'
-                            }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                            className="h-full rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] relative z-10"
-                          />
+                        <div>
+                          <p className="font-bold text-white">{p.name}</p>
+                          <p className="text-[10px] text-zinc-500 uppercase font-mono">{p.id === currentTournament.hostId ? 'Anfitrión' : 'Jugador'}</p>
                         </div>
                       </div>
-                      <div className="text-left text-[10px] md:text-lg font-black text-white tabular-nums tracking-tighter drop-shadow-sm">
-                        {Math.ceil(opponent.hp[opponent.activeIdx])} / {activeO ? calculateActualStat(activeO, 'hp') : 100}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Middle Row: Player Stats (Middle Right) */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 md:p-8 flex justify-end z-30 w-full pointer-events-none">
-              <AnimatePresence mode="wait">
-                {activeP && (
-                  <motion.div 
-                    key={activeP.id}
-                    initial={{ x: 100, opacity: 0 }}
-                    animate={{ 
-                      x: 0, 
-                      opacity: 1,
-                      scale: animState.defender === 'me' ? [1, 1.05, 1] : 1,
-                      rotate: animState.defender === 'me' ? [-1, 1, -1, 1, 0] : 0
-                    }}
-                    exit={{ x: 100, opacity: 0, transition: { duration: 0.3 } }}
-                    className="bg-white/20 backdrop-blur-xl border border-white/20 p-2 md:p-3 w-64 md:w-96 shadow-2xl relative overflow-hidden pointer-events-auto rounded-l-3xl"
-                    style={{ clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0 100%)' }}
-                  >
-                    <div className="pl-10">
-                      <div className="flex justify-between items-center mb-1">
-                        <div className="flex items-center gap-1 md:gap-2">
-                          <span className="text-sm md:text-xl font-black text-white uppercase tracking-tight truncate drop-shadow-md">{activeP?.name || 'Pokemon'}</span>
-                          <span className="text-blue-400 font-bold text-xs md:text-sm">♂</span>
+                    ) : (
+                      <div className="flex items-center gap-4 opacity-30">
+                        <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center">
+                          <Users className="w-5 h-5 text-zinc-600" />
                         </div>
-                        <span className="text-[10px] md:text-lg font-bold text-white/80 italic">Lv{activeP?.level || 1}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="bg-orange-500 text-[8px] md:text-[10px] font-black text-white px-1 rounded-sm leading-none py-0.5 shadow-sm">HP</div>
-                        <div className="flex-1 h-2 md:h-3 bg-black/40 rounded-full overflow-hidden p-[1px] md:p-[2px] border border-white/10 relative">
-                          {/* Ghost Bar (Damage taken effect) */}
-                          <motion.div 
-                            animate={{ 
-                              width: `${activeP ? (me.hp[me.activeIdx] / calculateActualStat(activeP, 'hp')) * 100 : 0}%`
-                            }}
-                            transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
-                            className="absolute inset-0 bg-white/40 rounded-full"
-                          />
-                          {/* Main HP Bar */}
-                          <motion.div 
-                            animate={{ 
-                              width: `${activeP ? (me.hp[me.activeIdx] / calculateActualStat(activeP, 'hp')) * 100 : 0}%`,
-                              backgroundColor: activeP && (me.hp[me.activeIdx] / calculateActualStat(activeP, 'hp')) < 0.2 ? '#f43f5e' : 
-                                             activeP && (me.hp[me.activeIdx] / calculateActualStat(activeP, 'hp')) < 0.5 ? '#f59e0b' : '#10b981'
-                            }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                            className="h-full rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] relative z-10"
-                          />
-                        </div>
-                      </div>
-                      <div className="text-right text-[10px] md:text-lg font-black text-white tabular-nums tracking-tighter drop-shadow-sm">
-                        {Math.ceil(me.hp[me.activeIdx])} / {activeP ? calculateActualStat(activeP, 'hp') : 100}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Sprites Area - Absolute positioned over everything */}
-            <div className="absolute inset-0 pointer-events-none z-10">
-              {/* Player Sprite - Bottom Left */}
-              <div className="absolute left-[5%] md:left-[10%] bottom-[20%] md:bottom-[25%]">
-                {/* Battle Base Platform */}
-                <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-64 md:w-[500px] h-16 md:h-32 bg-gradient-to-b from-emerald-400/40 to-emerald-900/60 rounded-[100%] border-b-8 border-emerald-950/40 shadow-[0_20px_50px_rgba(0,0,0,0.4)]" />
-                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-56 md:w-[440px] h-14 md:h-28 bg-emerald-500/20 rounded-[100%] border border-white/10" />
-                
-              <AnimatePresence initial={false}>
-                  {activeP && (
-                    <motion.div
-                      key={activeP.id}
-                      initial={{ x: -300, opacity: 0, scale: 0.5 }}
-                      animate={
-                        animState.attacker === 'me' ? { x: [0, 150, 0], scale: [1, 1.1, 1], opacity: 1 } :
-                        animState.defender === 'me' && animState.lastMove === '¡DEBILITADO!' ? { opacity: 0, scale: 0.5 } :
-                        animState.defender === 'me' ? { x: [-10, 10, -10, 10, 0], filter: ["brightness(1)", "brightness(2)", "brightness(1)"], opacity: 1 } :
-                        opponent.hp[opponent.activeIdx] <= 0 && currentRoom.winnerId === userId ? { scale: [1, 1.2, 1], opacity: 1 } :
-                        { x: 0, opacity: 1, scale: 1 }
-                      }
-                      exit={{ x: -300, opacity: 0, scale: 0.5, transition: { duration: 0.3 } }}
-                      transition={
-                        animState.attacker === 'me' ? { duration: 0.5 } :
-                        animState.defender === 'me' ? { duration: 0.4 } :
-                        { 
-                          x: { type: "spring", stiffness: 300, damping: 30 },
-                          opacity: { duration: 0.3 },
-                          scale: { duration: 0.3 }
-                        }
-                      }
-                      className="relative"
-                    >
-                      <motion.div
-                        animate={
-                          animState.attacker === 'me' ? { y: [0, -20, 0] } :
-                          animState.defender === 'me' && animState.lastMove === '¡DEBILITADO!' ? { y: 100 } :
-                          opponent.hp[opponent.activeIdx] <= 0 && currentRoom.winnerId === userId ? { y: [0, -20, 0] } :
-                          { y: [0, -8, 0] }
-                        }
-                        transition={
-                          animState.attacker === 'me' ? { duration: 0.5 } :
-                          animState.defender === 'me' && animState.lastMove === '¡DEBILITADO!' ? { duration: 0.4 } :
-                          opponent.hp[opponent.activeIdx] <= 0 && currentRoom.winnerId === userId ? { duration: 0.5 } :
-                          { y: { duration: 3.5, repeat: Infinity, ease: "easeInOut" } }
-                        }
-                      >
-                        <img 
-                          src={getPokemonImage(activeP, true)}
-                          className="w-[200px] md:w-[380px] h-[200px] md:h-[380px] object-contain drop-shadow-[0_20px_30px_rgba(0,0,0,0.5)] filter brightness-110 contrast-110"
-                          referrerPolicy="no-referrer"
-                        />
-                        {/* Active Glow */}
-                        {!isWaiting && (
-                          <motion.div 
-                            animate={{ opacity: [0.2, 0.4, 0.2] }}
-                            transition={{ duration: 2, repeat: Infinity }}
-                            className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full"
-                          />
-                        )}
-                      </motion.div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Opponent Sprite - Top Right */}
-              <div className="absolute right-[10%] md:right-[15%] top-[15%] md:top-[20%]">
-                {/* Battle Base Platform */}
-                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-48 md:w-80 h-12 md:h-20 bg-gradient-to-b from-emerald-400/40 to-emerald-900/60 rounded-[100%] border-b-4 border-emerald-950/40 shadow-[0_10px_30px_rgba(0,0,0,0.4)]" />
-                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-40 md:w-64 h-10 md:h-16 bg-emerald-500/20 rounded-[100%] border border-white/10" />
-                
-                <AnimatePresence initial={false}>
-                  {activeO && (
-                    <motion.div
-                      key={activeO.id}
-                      initial={{ x: 300, opacity: 0, scale: 0.5 }}
-                      animate={
-                        animState.attacker === 'opponent' ? { x: [0, -150, 0], scale: [1, 1.1, 1], opacity: 1 } :
-                        animState.defender === 'opponent' && animState.lastMove === '¡DEBILITADO!' ? { opacity: 0, scale: 0.5 } :
-                        animState.defender === 'opponent' ? { x: [10, -10, 10, -10, 0], filter: ["brightness(1)", "brightness(2)", "brightness(1)"], opacity: 1 } :
-                        me.hp[me.activeIdx] <= 0 && currentRoom.winnerId === opponent.id ? { scale: [1, 1.2, 1], opacity: 1 } :
-                        { x: 0, opacity: 1, scale: 1 }
-                      }
-                      exit={{ x: 300, opacity: 0, scale: 0.5, transition: { duration: 0.3 } }}
-                      transition={
-                        animState.attacker === 'opponent' ? { duration: 0.5 } :
-                        animState.defender === 'opponent' ? { duration: 0.4 } :
-                        { 
-                          x: { type: "spring", stiffness: 300, damping: 30 },
-                          opacity: { duration: 0.3 },
-                          scale: { duration: 0.3 }
-                        }
-                      }
-                      className="relative"
-                    >
-                      <motion.div
-                        animate={
-                          animState.attacker === 'opponent' ? { y: [0, 20, 0] } :
-                          animState.defender === 'opponent' && animState.lastMove === '¡DEBILITADO!' ? { y: 100 } :
-                          me.hp[me.activeIdx] <= 0 && currentRoom.winnerId === opponent.id ? { y: [0, -20, 0] } :
-                          { y: [0, 8, 0] }
-                        }
-                        transition={
-                          animState.attacker === 'opponent' ? { duration: 0.5 } :
-                          animState.defender === 'opponent' && animState.lastMove === '¡DEBILITADO!' ? { duration: 0.4 } :
-                          me.hp[me.activeIdx] <= 0 && currentRoom.winnerId === opponent.id ? { duration: 0.5 } :
-                          { y: { duration: 3.5, repeat: Infinity, ease: "easeInOut" } }
-                        }
-                      >
-                        <img 
-                          src={getPokemonImage(activeO, false)}
-                          className="w-[140px] md:w-[260px] h-[140px] md:h-[260px] object-contain drop-shadow-[0_20px_30px_rgba(0,0,0,0.5)]"
-                          referrerPolicy="no-referrer"
-                        />
-                      </motion.div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Battle Log Overlay removed - now using message box */}
-            </div>
-
-            <div className="flex-1" />
-
-            {/* Bottom Row: Classic Pokémon Battle Menu */}
-            <div className="h-32 md:h-48 bg-black/40 backdrop-blur-xl border-t border-white/10 z-20 flex w-full">
-              {/* Left: Message Box */}
-              <div className="flex-1 bg-white/10 m-1 md:m-2 border border-white/20 rounded-lg md:rounded-xl p-3 md:p-6 flex items-center shadow-inner">
-                <p className="text-white font-black text-sm md:text-2xl uppercase tracking-tight drop-shadow-md">
-                  {isWaiting ? `Esperando a ${opponent?.name}...` : (currentRoom.logs.length > 0 ? currentRoom.logs[currentRoom.logs.length - 1] : `¿Qué hará ${activeP?.name}?`)}
-                </p>
-              </div>
-
-              {/* Right: Action Grid */}
-              <div className="w-1/2 md:w-1/3 p-1 md:p-2 bg-white/5 backdrop-blur-md rounded-l-3xl border-l border-white/10">
-                {currentRoom.status === 'finished' ? (
-                  <div className="h-full flex items-center justify-center">
-                    <button 
-                      onClick={handleFinish}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest py-4 px-8 rounded-2xl transition-all shadow-lg"
-                    >
-                      Finalizar
-                    </button>
-                  </div>
-                ) : (
-                  <div className="h-full grid grid-cols-2 gap-1 md:gap-2">
-                    <button 
-                      disabled={isWaiting}
-                      onClick={() => setShowMoves(true)}
-                      className="bg-gradient-to-br from-rose-500 to-rose-700 border-b-4 border-rose-900 rounded-lg md:rounded-xl flex items-center justify-center text-white font-black text-xs md:text-xl uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 shadow-lg"
-                    >
-                      LUCHA
-                    </button>
-                    <button 
-                      disabled={isWaiting}
-                      onClick={() => setShowBag(true)}
-                      className="bg-gradient-to-br from-amber-500 to-amber-700 border-b-4 border-amber-900 rounded-lg md:rounded-xl flex items-center justify-center text-white font-black text-xs md:text-xl uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 shadow-lg"
-                    >
-                      MOCHILA
-                    </button>
-                    <button 
-                      disabled={isWaiting}
-                      onClick={() => setShowPokemon(true)}
-                      className="bg-gradient-to-br from-emerald-500 to-emerald-700 border-b-4 border-emerald-900 rounded-lg md:rounded-xl flex items-center justify-center text-white font-black text-xs md:text-xl uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 shadow-lg"
-                    >
-                      POKÉMON
-                    </button>
-                    <button 
-                      onClick={handleSurrender}
-                      className="bg-gradient-to-br from-zinc-700 to-zinc-900 border-b-4 border-black rounded-lg md:rounded-xl flex items-center justify-center text-white font-black text-xs md:text-xl uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-lg"
-                    >
-                      HUIR
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Pokémon Selection Overlay */}
-            <AnimatePresence>
-              {showPokemon && !isWaiting && currentRoom.status === 'playing' && (
-                <motion.div
-                  initial={{ y: 100 }}
-                  animate={{ y: 0 }}
-                  exit={{ y: 100 }}
-                  className="absolute bottom-0 left-0 w-full h-48 md:h-64 bg-[#303030] border-t-4 border-zinc-900 z-40 flex flex-col"
-                >
-                  <div className="p-2 md:p-4 border-b border-white/10 flex justify-between items-center">
-                    <span className="text-white font-black uppercase tracking-widest text-sm md:text-xl">Seleccionar Pokémon</span>
-                    <button onClick={() => setShowPokemon(false)} className="text-zinc-400 hover:text-white">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-x-auto p-2 md:p-4 flex gap-2 md:gap-4 items-center">
-                    {me.team.map((p, i) => (
-                      <button
-                        key={i}
-                        disabled={i === me.activeIdx || me.hp[i] <= 0}
-                        onClick={() => {
-                          switchMultiplayerPokemon(i);
-                          setShowPokemon(false);
-                        }}
-                        className={`flex-shrink-0 w-24 md:w-40 h-full rounded-xl p-2 md:p-4 flex flex-col items-center justify-center transition-all ${
-                          i === me.activeIdx ? 'bg-indigo-600/40 border-2 border-indigo-500' : 
-                          me.hp[i] <= 0 ? 'opacity-50 grayscale bg-zinc-800' : 'bg-zinc-800 hover:bg-zinc-700'
-                        }`}
-                      >
-                        <img src={getPokemonImage(p)} className="w-12 md:w-20 h-12 md:h-20 object-contain" />
-                        <span className="text-white font-bold text-[10px] md:text-sm uppercase mt-1 md:mt-2 truncate w-full text-center">{p.name}</span>
-                        <div className="w-full h-1 bg-zinc-900 rounded-full mt-1 overflow-hidden">
-                          <div className="h-full bg-emerald-500" style={{ width: `${(me.hp[i] / 100) * 100}%` }} />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Bag Overlay */}
-            <AnimatePresence>
-              {showBag && !isWaiting && currentRoom.status === 'playing' && (
-                <motion.div
-                  initial={{ y: 100 }}
-                  animate={{ y: 0 }}
-                  exit={{ y: 100 }}
-                  className="absolute bottom-0 left-0 w-full h-48 md:h-64 bg-[#303030] border-t-4 border-zinc-900 z-40 flex flex-col"
-                >
-                  <div className="p-2 md:p-4 border-b border-white/10 flex justify-between items-center">
-                    <span className="text-white font-black uppercase tracking-widest text-sm md:text-xl">Mochila</span>
-                    <button onClick={() => setShowBag(false)} className="text-zinc-400 hover:text-white">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-2 md:p-4 grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {inventory.length > 0 ? inventory.map((item, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          useMultiplayerItem(item.id, me.activeIdx);
-                          setShowBag(false);
-                        }}
-                        className="bg-zinc-800 hover:bg-zinc-700 rounded-xl p-2 md:p-4 flex items-center gap-2 md:gap-4 transition-all border border-white/5"
-                      >
-                        <div className="w-8 md:w-12 h-8 md:h-12 bg-amber-500/20 rounded-lg flex items-center justify-center text-amber-500">
-                          <Briefcase size={20} />
-                        </div>
-                        <div className="flex flex-col items-start">
-                          <span className="text-white font-bold text-[10px] md:text-sm uppercase">{item.name}</span>
-                          <span className="text-zinc-500 text-[8px] md:text-xs font-bold">CANT: {item.quantity}</span>
-                        </div>
-                      </button>
-                    )) : (
-                      <div className="col-span-full flex flex-col items-center justify-center text-zinc-500 py-8">
-                        <Briefcase size={32} className="mb-2 opacity-20" />
-                        <span className="font-bold uppercase text-xs">No tienes objetos</span>
+                        <p className="font-bold text-zinc-600 italic">Esperando...</p>
                       </div>
                     )}
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <AnimatePresence>
-              {showMoves && !isWaiting && currentRoom.status === 'playing' && (
-                <motion.div
-                  initial={{ y: 100 }}
-                  animate={{ y: 0 }}
-                  exit={{ y: 100 }}
-                  className="absolute bottom-0 left-0 w-full h-32 md:h-48 bg-[#303030] border-t-4 border-zinc-900 z-30 flex"
-                >
-                  <div className="flex-[2] grid grid-cols-2 gap-1 md:gap-2 p-1 md:p-2">
-                    {activeP.moves.map((move, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          submitMove(move);
-                          setShowMoves(false);
-                        }}
-                        className={`rounded-lg md:rounded-xl ${getTypeColor(move.type)} border-b-4 border-black/20 flex flex-col items-start justify-center px-4 md:px-8 hover:brightness-110 active:scale-95 transition-all`}
-                      >
-                        <span className="text-black font-black text-xs md:text-2xl uppercase tracking-tight">{move.name}</span>
-                        <span className="text-black/60 font-bold text-[8px] md:text-xs uppercase">{move.type}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex-1 bg-white/10 backdrop-blur-xl m-1 md:m-2 border border-white/20 rounded-lg md:rounded-xl p-3 md:p-6 flex flex-col justify-center relative shadow-inner">
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white uppercase italic tracking-tight">Bracket</h3>
+              {matchError && <p className="text-red-400 text-xs font-bold animate-pulse">{matchError}</p>}
+            </div>
+            <div className="space-y-8 relative">
+              {/* Semi Finals */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-center flex flex-col items-center justify-center">
+                  <p className="text-[10px] text-zinc-500 uppercase font-mono mb-2">Semi 1</p>
+                  <p className="text-xs font-bold text-white truncate mb-2">
+                    {currentTournament.matches.semi1.player1Id ? currentTournament.players.find(x => x.id === currentTournament.matches.semi1.player1Id)?.name : '?'} vs {currentTournament.matches.semi1.player2Id ? currentTournament.players.find(x => x.id === currentTournament.matches.semi1.player2Id)?.name : '?'}
+                  </p>
+                  {currentTournament.status === 'semifinals' && !currentTournament.matches.semi1.winnerId && (currentTournament.matches.semi1.player1Id === userId || currentTournament.matches.semi1.player2Id === userId) && (
                     <button 
-                      onClick={() => setShowMoves(false)}
-                      className="absolute top-2 right-2 text-white/40 hover:text-white"
+                      onClick={() => handlePlayMatch('semi1')}
+                      className="px-4 py-1 bg-blue-500 text-white rounded-lg text-xs font-bold uppercase italic hover:bg-blue-600 transition-all"
                     >
-                      <X size={16} />
+                      Jugar
                     </button>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-white/60 font-bold text-xs md:text-xl uppercase">PP</span>
-                      <span className="text-white font-black text-xs md:text-2xl">15/15</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/60 font-bold text-xs md:text-xl uppercase">TIPO</span>
-                      <span className="text-white font-black text-xs md:text-2xl uppercase">NORMAL</span>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  )}
+                  {currentTournament.matches.semi1.winnerId && (
+                    <p className="text-xs font-bold text-green-400">Ganador: {currentTournament.players.find(x => x.id === currentTournament.matches.semi1.winnerId)?.name}</p>
+                  )}
+                </div>
+                <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-center flex flex-col items-center justify-center">
+                  <p className="text-[10px] text-zinc-500 uppercase font-mono mb-2">Semi 2</p>
+                  <p className="text-xs font-bold text-white truncate mb-2">
+                    {currentTournament.matches.semi2.player1Id ? currentTournament.players.find(x => x.id === currentTournament.matches.semi2.player1Id)?.name : '?'} vs {currentTournament.matches.semi2.player2Id ? currentTournament.players.find(x => x.id === currentTournament.matches.semi2.player2Id)?.name : '?'}
+                  </p>
+                  {currentTournament.status === 'semifinals' && !currentTournament.matches.semi2.winnerId && (currentTournament.matches.semi2.player1Id === userId || currentTournament.matches.semi2.player2Id === userId) && (
+                    <button 
+                      onClick={() => handlePlayMatch('semi2')}
+                      className="px-4 py-1 bg-blue-500 text-white rounded-lg text-xs font-bold uppercase italic hover:bg-blue-600 transition-all"
+                    >
+                      Jugar
+                    </button>
+                  )}
+                  {currentTournament.matches.semi2.winnerId && (
+                    <p className="text-xs font-bold text-green-400">Ganador: {currentTournament.players.find(x => x.id === currentTournament.matches.semi2.winnerId)?.name}</p>
+                  )}
+                </div>
+              </div>
+              {/* Final */}
+              <div className="max-w-[200px] mx-auto p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl text-center flex flex-col items-center justify-center">
+                <p className="text-[10px] text-blue-400 uppercase font-mono mb-2">Gran Final</p>
+                <p className="text-xs font-bold text-white mb-2">
+                  {currentTournament.matches.final.player1Id ? currentTournament.players.find(x => x.id === currentTournament.matches.final.player1Id)?.name : 'TBD'} vs {currentTournament.matches.final.player2Id ? currentTournament.players.find(x => x.id === currentTournament.matches.final.player2Id)?.name : 'TBD'}
+                </p>
+                {currentTournament.status === 'final' && !currentTournament.matches.final.winnerId && (currentTournament.matches.final.player1Id === userId || currentTournament.matches.final.player2Id === userId) && (
+                  <button 
+                    onClick={() => handlePlayMatch('final')}
+                    className="px-4 py-1 bg-blue-500 text-white rounded-lg text-xs font-bold uppercase italic hover:bg-blue-600 transition-all"
+                  >
+                    Jugar
+                  </button>
+                )}
+                {currentTournament.matches.final.winnerId && (
+                  <p className="text-xs font-bold text-green-400">Campeón: {currentTournament.players.find(x => x.id === currentTournament.matches.final.winnerId)?.name}</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      </motion.div>
 
+        {currentTournament.status === 'waiting' && (
+          <div className="flex justify-center">
+            <div className="px-12 py-4 bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-full font-black italic uppercase tracking-tighter text-xl">
+              Esperando Jugadores ({currentTournament.players.length}/4)...
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (currentRoom?.status === 'playing' || currentRoom?.status === 'finished') {
+    return <MultiplayerBattle />;
+  }
+
+  const handleCreateRoom = async () => {
+    setIsCreating(true);
+    const team = activeTeamIds.map(id => roster.find(p => p.id === id)!).filter(Boolean);
+    const hp = team.map(p => calculateActualStat(p, 'hp'));
+    await createMultiplayerRoom(false, '', team, hp);
+    setIsCreating(false);
+  };
+
+  const handleJoinRoom = async () => {
+    if (!roomCode) return;
+    setIsJoining(true);
+    await joinMultiplayerRoomByCode(roomCode);
+    setIsJoining(false);
+  };
+
+  const handleSelectMode = async (mode: 'Competitive' | 'Free') => {
+    setSelectedMode(mode);
+    if (currentRoom && currentRoom.player1.id === userId) {
+      await setRoomMode(mode);
+    }
+  };
+
+  const generateFreeModePokemon = (base: any): PokemonInstance => {
+    const level = 50;
+    const ivs = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
+    const evs = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
+    
+    // Mock moves for now, in a real app we'd have a move list
+    const mockMoves: Move[] = [
+      { id: '1', name: 'Ataque Rápido', type: 'Normal', category: 'Physical', power: 40, accuracy: 100 },
+      { id: '2', name: 'Golpe Cuerpo', type: 'Normal', category: 'Physical', power: 85, accuracy: 100 },
+      { id: '3', name: 'Protección', type: 'Normal', category: 'Status', power: 0, accuracy: 100 },
+      { id: '4', name: 'Sustituto', type: 'Normal', category: 'Status', power: 0, accuracy: 100 },
+    ];
+
+    const instance: PokemonInstance = {
+      id: Math.random().toString(36).substring(2, 9),
+      pokedexNumber: base.id,
+      name: base.name,
+      sprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${base.id}.png`,
+      types: base.types,
+      level,
+      exp: 0,
+      rarity: base.rarity || 'Common',
+      isShiny: false,
+      baseStats: base.stats || { hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50 },
+      currentStats: base.stats || { hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50 },
+      ivs,
+      evs,
+      nature: 'Adamant',
+      ability: { name: 'Habilidad Especial', description: 'Mejor habilidad para este Pokémon.' },
+      moves: mockMoves,
+      fatigue: 0,
+      morale: 'Excellent',
+      isInjured: false,
+      injuryDaysRemaining: 0,
+      currentHp: 100, // Will be calculated
+      currentOVR: 0,
+      happiness: 255,
+      megaEvolved: false
+    };
+
+    instance.currentHp = calculateActualStat(instance, 'hp');
+    return instance;
+  };
+
+  const handleAddPokemonToFreeTeam = (base: any) => {
+    if (freeModeTeam.length >= 6) return;
+    const newPokemon = generateFreeModePokemon(base);
+    setFreeModeTeam([...freeModeTeam, newPokemon]);
+  };
+
+  const handleRemovePokemonFromFreeTeam = (id: string) => {
+    setFreeModeTeam(freeModeTeam.filter(p => p.id !== id));
+  };
+
+  const handleStartGame = async () => {
+    if (!currentRoom) return;
+
+    let team: PokemonInstance[] = [];
+    if (currentRoom.mode === 'Competitive') {
+      team = activeTeamIds.map(id => roster.find(p => p.id === id)!).filter(Boolean);
+    } else {
+      team = freeModeTeam;
+    }
+
+    if (team.length === 0) {
+      alert('Debes tener al menos un Pokémon en tu equipo.');
+      return;
+    }
+
+    const hp = team.map(p => calculateActualStat(p, 'hp'));
+
+    await startMultiplayerGame({
+      team,
+      hp
+    });
+  };
+
+  const filteredPokedex = POKEDEX_BASE.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  ).slice(0, 20);
+
+  if (currentRoom) {
+    const isPlayer1 = currentRoom.player1.id === userId;
+    const isWaitingForPlayer2 = !currentRoom.player2;
+    const mode = currentRoom.mode;
+
+    const isReadyToStart = !isWaitingForPlayer2 && 
+      currentRoom.player1.team.length > 0 && 
+      currentRoom.player2?.team.length > 0;
+
+    return (
+      <div className="flex flex-col h-full bg-zinc-950 p-6 overflow-y-auto">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">Sala de Combate</h2>
+            <p className="text-zinc-500 font-mono text-sm">CÓDIGO: <span className="text-blue-400 font-bold">{currentRoom.roomCode}</span></p>
+          </div>
+          <button 
+            onClick={leaveRoom}
+            className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg hover:bg-red-500/20 transition-all font-bold uppercase italic text-xs"
+          >
+            Abandonar
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          {/* Player 1 */}
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-2 bg-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-widest rounded-bl-lg">Anfitrión</div>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
+                <Users className="w-6 h-6 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">{currentRoom.player1.name}</h3>
+                <p className="text-zinc-500 text-xs uppercase font-mono">Jugador 1</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {currentRoom.player1.team.map((p, i) => (
+                <div key={i} className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden">
+                  <img src={p.sprite} alt={p.name} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Player 2 */}
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
+            {currentRoom.player2 ? (
+              <>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/30">
+                    <Users className="w-6 h-6 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">{currentRoom.player2.name}</h3>
+                    <p className="text-zinc-500 text-xs uppercase font-mono">Jugador 2</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {currentRoom.player2.team.map((p, i) => (
+                    <div key={i} className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden">
+                      <img src={p.sprite} alt={p.name} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center py-8 text-center">
+                <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mb-4 animate-pulse">
+                  <Users className="w-6 h-6 text-zinc-600" />
+                </div>
+                <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Esperando oponente...</p>
+                <p className="text-zinc-600 text-[10px] mt-2">Comparte el código con un amigo</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mode Selection & Team Prep */}
+        <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-3xl p-8">
+          {!mode ? (
+            isPlayer1 ? (
+              <div className="text-center">
+                <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white mb-6">Selecciona el Modo de Juego</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                  <button 
+                    onClick={() => handleSelectMode('Competitive')}
+                    className="group relative h-40 rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Trophy className="w-12 h-12 text-blue-500 mx-auto mb-2" />
+                    <span className="block text-xl font-black italic uppercase text-white">Competitivo</span>
+                    <span className="block text-zinc-500 text-[10px] uppercase font-mono mt-1">Usa tu propio equipo</span>
+                  </button>
+                  <button 
+                    onClick={() => handleSelectMode('Free')}
+                    className="group relative h-40 rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Zap className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
+                    <span className="block text-xl font-black italic uppercase text-white">Libre</span>
+                    <span className="block text-zinc-500 text-[10px] uppercase font-mono mt-1">Elige 6 Pokémon (Nivel 50)</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-zinc-500 font-mono text-sm uppercase tracking-widest">El anfitrión está seleccionando el modo...</p>
+              </div>
+            )
+          ) : (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${mode === 'Competitive' ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                    {mode === 'Competitive' ? <Trophy className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+                  </div>
+                  <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">Modo {mode === 'Competitive' ? 'Competitivo' : 'Libre'}</h3>
+                </div>
+                {isPlayer1 && (
+                  <button 
+                    onClick={() => handleSelectMode(mode === 'Competitive' ? 'Free' : 'Competitive')}
+                    className="text-zinc-500 hover:text-white text-xs uppercase font-mono underline underline-offset-4"
+                  >
+                    Cambiar Modo
+                  </button>
+                )}
+              </div>
+
+              {mode === 'Free' && (
+                <div className="space-y-6">
+                  <div className="flex flex-wrap gap-4">
+                    {freeModeTeam.map((p) => (
+                      <div key={p.id} className="relative group w-24 h-24 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                        <img src={p.sprite} alt={p.name} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+                        <button 
+                          onClick={() => handleRemovePokemonFromFreeTeam(p.id)}
+                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-zinc-800 rounded text-[8px] font-bold text-zinc-400 uppercase">LVL 50</div>
+                      </div>
+                    ))}
+                    {freeModeTeam.length < 6 && (
+                      <button 
+                        onClick={() => setIsSelectingPokemon(true)}
+                        className="w-24 h-24 rounded-2xl border-2 border-dashed border-zinc-800 hover:border-emerald-500/50 hover:bg-emerald-500/5 flex flex-col items-center justify-center transition-all"
+                      >
+                        <Plus className="w-6 h-6 text-zinc-600" />
+                        <span className="text-[10px] text-zinc-600 font-bold uppercase mt-1">Añadir</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {isSelectingPokemon && (
+                    <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-lg font-bold text-white">Seleccionar Pokémon</h4>
+                        <button onClick={() => setIsSelectingPokemon(false)}><X className="w-5 h-5 text-zinc-500" /></button>
+                      </div>
+                      <div className="relative mb-4">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                        <input 
+                          type="text" 
+                          placeholder="Buscar por nombre..." 
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-2 pl-10 pr-4 text-white text-sm focus:outline-none focus:border-emerald-500/50"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {filteredPokedex.map(p => (
+                          <button 
+                            key={p.id}
+                            onClick={() => handleAddPokemonToFreeTeam(p)}
+                            className="flex items-center gap-3 p-2 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-emerald-500/50 transition-all"
+                          >
+                            <img 
+                              src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${p.id}.png`} 
+                              alt={p.name} 
+                              className="w-10 h-10 object-contain" 
+                              referrerPolicy="no-referrer"
+                            />
+                            <span className="text-xs font-bold text-white truncate">{p.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {mode === 'Competitive' && (
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-6">
+                  <p className="text-blue-400 text-sm font-medium mb-4">Se usará tu equipo activo actual:</p>
+                  <div className="flex flex-wrap gap-4">
+                    {activeTeamIds.map(id => {
+                      const p = roster.find(x => x.id === id);
+                      if (!p) return null;
+                      return (
+                        <div key={id} className="w-20 h-20 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center relative">
+                          <img src={p.sprite} alt={p.name} className="w-14 h-14 object-contain" referrerPolicy="no-referrer" />
+                          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-zinc-800 rounded text-[8px] font-bold text-zinc-400 uppercase">LVL {p.level}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-center pt-8">
+                {isPlayer1 ? (
+                  <button 
+                    onClick={handleStartGame}
+                    disabled={!isReadyToStart}
+                    className="group relative px-12 py-4 bg-white text-black rounded-full font-black italic uppercase tracking-tighter text-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 disabled:cursor-not-allowed"
+                  >
+                    {isWaitingForPlayer2 ? 'Esperando Oponente...' : 
+                     (mode === 'Free' && (!currentRoom.player1.team.length || !currentRoom.player2?.team.length)) ? 'Esperando Equipos...' :
+                     '¡Comenzar Batalla!'}
+                  </button>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-zinc-500 font-mono text-sm uppercase tracking-widest">
+                      {isReadyToStart ? '¡Listo! Esperando al anfitrión...' : 'Prepara tu equipo para comenzar...'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="relative overflow-hidden rounded-[40px] bg-zinc-900 border border-white/10 p-8 md:p-12">
-        <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-indigo-600/10 to-transparent pointer-events-none" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 md:gap-12">
-          <div className="w-24 h-24 md:w-32 md:h-32 bg-indigo-600/20 rounded-[32px] flex items-center justify-center text-indigo-400 shadow-inner">
-            <Users size={48} className="md:size-64" />
-          </div>
-          
-          <div className="flex-1 text-center md:text-left">
-            <h1 className="text-4xl md:text-6xl font-black uppercase italic tracking-tighter text-white mb-4">
-              Arena <span className="text-indigo-500">Multijugador</span>
-            </h1>
-            <p className="text-zinc-400 text-lg max-w-xl">
-              Enfréntate a otros entrenadores en tiempo real. Pon a prueba tu equipo y sube en el ranking global.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 bg-zinc-900 rounded-[32px] border border-white/10 p-8 flex flex-col items-center justify-center min-h-[400px] relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-500/5 via-transparent to-transparent" />
-          
-          <AnimatePresence mode="wait">
-            {!currentRoom ? (
-              <motion.div 
-                key="idle"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="text-center space-y-8 relative z-10"
-              >
-                <div className="flex justify-center gap-4">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="w-12 h-12 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-center text-zinc-500">
-                      <Shield size={20} />
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-black text-white uppercase italic">¿Listo para el desafío?</h3>
-                  <p className="text-zinc-500 font-medium">Se buscará un oponente con un nivel similar al tuyo.</p>
-                  <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest bg-indigo-500/10 py-2 px-4 rounded-full inline-block">
-                    Tip: Abre el juego en otra pestaña para jugar contra ti mismo
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <button 
-                    onClick={handleRoomAction}
-                    disabled={playerTeam.length === 0}
-                    className="group relative w-full px-12 py-6 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl shadow-indigo-600/20 overflow-hidden"
-                  >
-                    <span className="relative flex items-center justify-center gap-3 text-lg">
-                      <Swords size={24} />
-                      Buscar Partida Pública
-                    </span>
-                  </button>
-                </div>
-                
-                {playerTeam.length === 0 && (
-                  <p className="text-rose-500 text-xs font-bold uppercase tracking-widest">
-                    Debes tener al menos un Pokémon en tu equipo activo
-                  </p>
-                )}
-              </motion.div>
-            ) : (
-              <motion.div 
-                key="searching"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.1 }}
-                className="text-center space-y-8 relative z-10"
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full animate-pulse" />
-                  <Loader2 size={80} className="text-indigo-500 animate-spin mx-auto relative z-10" />
-                </div>
-                
-                <div className="space-y-2">
-                  <h3 className="text-3xl font-black text-white uppercase italic animate-pulse">Buscando Oponente...</h3>
-                  <p className="text-zinc-500 font-medium tracking-widest uppercase text-xs">Tiempo estimado: <span className="text-white">0:15</span></p>
-                </div>
-
-                <button 
-                  onClick={cancelSearch}
-                  className="px-8 py-4 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-black uppercase tracking-widest rounded-xl border border-white/10 transition-all"
-                >
-                  Cancelar Búsqueda
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+    <div className="flex flex-col h-full bg-zinc-950 p-8 overflow-y-auto">
+      <div className="max-w-4xl mx-auto w-full">
+        <div className="mb-12">
+          <h2 className="text-6xl font-black italic uppercase tracking-tighter text-white leading-none">Multijugador</h2>
+          <p className="text-zinc-500 font-mono text-sm mt-2 uppercase tracking-widest">Desafía a otros entrenadores en tiempo real</p>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-zinc-900 rounded-[32px] border border-white/10 p-6 space-y-6">
-            <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-              <Trophy className="text-amber-500" size={20} />
-              <h3 className="font-black text-white uppercase italic tracking-tighter">Tu Rango</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Create Room */}
+          <div className="group relative bg-zinc-900 border border-zinc-800 rounded-3xl p-8 hover:border-blue-500/50 transition-all overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative z-10">
+              <div className="w-16 h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center mb-6 border border-blue-500/30">
+                <Plus className="w-8 h-8 text-blue-400" />
+              </div>
+              <h3 className="text-3xl font-black italic uppercase tracking-tighter text-white mb-2">Crear Sala</h3>
+              <p className="text-zinc-500 text-sm mb-8">Genera un código único e invita a un amigo a combatir.</p>
+              <button 
+                onClick={handleCreateRoom}
+                disabled={isCreating}
+                className="w-full py-4 bg-blue-500 text-white rounded-xl font-bold uppercase italic tracking-tight hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                {isCreating ? 'Creando...' : 'Crear Nueva Sala'}
+              </button>
             </div>
-            
+          </div>
+
+          {/* Join Room */}
+          <div className="group relative bg-zinc-900 border border-zinc-800 rounded-3xl p-8 hover:border-emerald-500/50 transition-all overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative z-10">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 flex items-center justify-center mb-6 border border-emerald-500/30">
+                <Key className="w-8 h-8 text-emerald-400" />
+              </div>
+              <h3 className="text-3xl font-black italic uppercase tracking-tighter text-white mb-2">Unirse a Sala</h3>
+              <p className="text-zinc-500 text-sm mb-8">Introduce el código de la sala de tu amigo para entrar.</p>
+              
+              <div className="space-y-4">
+                <input 
+                  type="text" 
+                  placeholder="CÓDIGO DE SALA" 
+                  value={roomCode}
+                  onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-4 px-6 text-center text-2xl font-black tracking-[0.5em] text-white focus:outline-none focus:border-emerald-500/50 placeholder:text-zinc-800 placeholder:tracking-normal placeholder:font-bold"
+                />
+                <button 
+                  onClick={handleJoinRoom}
+                  disabled={isJoining || !roomCode}
+                  className="w-full py-4 bg-emerald-500 text-white rounded-xl font-bold uppercase italic tracking-tight hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                >
+                  {isJoining ? 'Uniéndose...' : 'Entrar a la Sala'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Match / Info */}
+        <div className="mt-12 p-8 bg-zinc-900/30 border border-zinc-800/50 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-6">
+            <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center">
+              <Play className="w-6 h-6 text-zinc-400 fill-zinc-400" />
+            </div>
+            <div>
+              <h4 className="text-xl font-bold text-white">Partida Rápida</h4>
+              <p className="text-zinc-500 text-sm">Busca oponentes aleatorios en línea.</p>
+            </div>
+          </div>
+          <button 
+            onClick={isSearchingMatch ? cancelQuickMatch : findQuickMatch}
+            className={`px-8 py-3 rounded-full font-bold uppercase italic text-sm transition-all ${
+              isSearchingMatch 
+                ? 'bg-red-500 text-white animate-pulse' 
+                : 'bg-zinc-800 text-white hover:bg-zinc-700'
+            }`}
+          >
+            {isSearchingMatch ? 'Buscando... (Cancelar)' : 'Buscar Partida'}
+          </button>
+        </div>
+
+        {/* Tournament Section */}
+        <div className="mt-8 p-8 bg-zinc-900/30 border border-zinc-800/50 rounded-3xl">
+          <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                <Zap size={32} />
+              <div className="w-12 h-12 rounded-2xl bg-yellow-500/20 flex items-center justify-center border border-yellow-500/30">
+                <Trophy className="w-6 h-6 text-yellow-500" />
               </div>
               <div>
-                <p className="text-xs font-black text-indigo-400 uppercase tracking-widest">Bronce III</p>
-                <h4 className="text-xl font-black text-white uppercase italic">1,240 LP</h4>
+                <h4 className="text-xl font-bold text-white">Torneos</h4>
+                <p className="text-zinc-500 text-sm">Crea o únete a un torneo de 4 jugadores.</p>
               </div>
             </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                <span className="text-zinc-500">Progreso al siguiente rango</span>
-                <span className="text-white">80%</span>
-              </div>
-              <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-indigo-500 w-[80%]" />
-              </div>
-            </div>
+            {!isCreatingTournament && (
+              <button 
+                onClick={() => setIsCreatingTournament(true)}
+                className="px-6 py-2 bg-yellow-500 text-black rounded-full font-bold uppercase italic text-xs hover:bg-yellow-400 transition-colors"
+              >
+                Crear Torneo
+              </button>
+            )}
           </div>
+
+          {isCreatingTournament ? (
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6">
+              <h5 className="text-white font-bold mb-4 uppercase italic">Configurar Torneo</h5>
+              <div className="flex flex-col gap-4">
+                <input 
+                  type="text" 
+                  placeholder="Nombre del Torneo" 
+                  value={tournamentName}
+                  onChange={(e) => setTournamentName(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-yellow-500/50"
+                />
+                
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-400 text-sm font-bold uppercase">Visibilidad:</span>
+                    <button
+                      onClick={() => setTournamentIsPublic(true)}
+                      className={`px-4 py-1 rounded-full text-xs font-bold uppercase transition-colors ${tournamentIsPublic ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      Público
+                    </button>
+                    <button
+                      onClick={() => setTournamentIsPublic(false)}
+                      className={`px-4 py-1 rounded-full text-xs font-bold uppercase transition-colors ${!tournamentIsPublic ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      Privado
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-400 text-sm font-bold uppercase">Modo:</span>
+                    <button
+                      onClick={() => setTournamentMode('libre')}
+                      className={`px-4 py-1 rounded-full text-xs font-bold uppercase transition-colors ${tournamentMode === 'libre' ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      Libre
+                    </button>
+                    <button
+                      onClick={() => setTournamentMode('competitivo')}
+                      className={`px-4 py-1 rounded-full text-xs font-bold uppercase transition-colors ${tournamentMode === 'competitivo' ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      Competitivo
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mt-2">
+                  <button 
+                    onClick={async () => {
+                      if (!tournamentName) return;
+                      await createTournament(tournamentName, tournamentIsPublic, tournamentMode);
+                      setIsCreatingTournament(false);
+                    }}
+                    className="flex-1 px-6 py-2 bg-yellow-500 text-black rounded-xl font-bold uppercase italic text-sm"
+                  >
+                    Confirmar
+                  </button>
+                  <button 
+                    onClick={() => setIsCreatingTournament(false)}
+                    className="flex-1 px-6 py-2 bg-zinc-800 text-white rounded-xl font-bold uppercase italic text-sm"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {activeTournaments.length > 0 ? (
+                activeTournaments.map(t => (
+                  <div key={t.id} className="p-6 bg-zinc-950 border border-zinc-800 rounded-2xl flex flex-col justify-between">
+                    <div>
+                      <h6 className="text-white font-bold uppercase italic">{t.name}</h6>
+                      <div className="flex gap-2 mt-2">
+                        <span className="px-2 py-1 bg-zinc-900 rounded text-[10px] text-zinc-400 font-bold uppercase">
+                          {t.players.length}/4 Jugadores
+                        </span>
+                        <span className="px-2 py-1 bg-zinc-900 rounded text-[10px] text-zinc-400 font-bold uppercase">
+                          {t.mode}
+                        </span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => joinTournament(t.id)}
+                      className="mt-4 w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold uppercase italic text-xs transition-colors"
+                    >
+                      Unirse
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="p-6 bg-zinc-950 border border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-center opacity-50 col-span-full">
+                  <Search className="w-8 h-8 text-zinc-700 mb-2" />
+                  <p className="text-zinc-600 text-xs font-bold uppercase">No hay torneos públicos</p>
+                  <p className="text-zinc-700 text-[10px] mt-1">Crea uno para invitar a tus amigos</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default MultiplayerTab;

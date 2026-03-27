@@ -149,6 +149,8 @@ export interface MultiplayerPlayer {
 
 export interface MultiplayerRoom {
   id?: string;
+  roomCode?: string;
+  mode?: 'Competitive' | 'Free';
   status: 'waiting' | 'playing' | 'finished';
   player1: MultiplayerPlayer;
   player2: MultiplayerPlayer | null;
@@ -158,6 +160,31 @@ export interface MultiplayerRoom {
   updatedAt: number;
   isPrivate?: boolean;
   targetPlayerId?: string;
+}
+
+export interface TournamentMatch {
+  id: string;
+  player1Id: string;
+  player2Id: string;
+  winnerId: string | null;
+  roomId: string | null;
+}
+
+export interface Tournament {
+  id: string;
+  name: string;
+  hostId: string;
+  isPublic: boolean;
+  mode: 'libre' | 'competitivo';
+  players: { id: string; name: string; team: PokemonInstance[] }[];
+  status: 'waiting' | 'semifinals' | 'final' | 'finished';
+  matches: {
+    semi1: TournamentMatch;
+    semi2: TournamentMatch;
+    final: TournamentMatch;
+  };
+  winnerId: string | null;
+  createdAt: number;
 }
 
 export interface GameState {
@@ -213,13 +240,36 @@ export interface GameState {
   setUid: (uid: string) => void;
   setUserName: (name: string) => void;
   currentRoom: MultiplayerRoom | null;
+  currentTournament: Tournament | null;
   unsubscribeRoom: (() => void) | null;
+  unsubscribeTournament: (() => void) | null;
   subscribeToRoom: (roomId: string, userId: string) => void;
+  subscribeToTournament: (tournamentId: string) => void;
   leaveRoom: () => void;
+  leaveTournament: () => Promise<void>;
+  createMultiplayerRoom: (isPrivate?: boolean, targetPlayerId?: string, team?: PokemonInstance[], hp?: number[]) => Promise<string>;
+  joinMultiplayerRoomByCode: (code: string) => Promise<void>;
+  setRoomMode: (mode: 'Competitive' | 'Free') => Promise<void>;
+  updateMultiplayerTeam: (team: PokemonInstance[], hp: number[]) => Promise<void>;
+  startMultiplayerGame: (player2Data: Partial<MultiplayerPlayer>) => Promise<void>;
   submitMultiplayerMove: (move: Move) => Promise<void>;
   switchMultiplayerPokemon: (newIdx: number) => Promise<void>;
   useMultiplayerItem: (itemId: string, targetIdx: number) => Promise<void>;
+  fleeMultiplayerBattle: () => Promise<void>;
+  resetRoomToWaiting: () => Promise<void>;
+  
+  // Quick Match
+  findQuickMatch: () => Promise<void>;
+  cancelQuickMatch: () => Promise<void>;
+  isSearchingMatch: boolean;
 
+  // Tournaments
+  createTournament: (name: string, isPublic?: boolean, mode?: 'libre' | 'competitivo') => Promise<string>;
+  joinTournament: (tournamentId: string) => Promise<void>;
+  playTournamentMatch: (matchId: 'semi1' | 'semi2' | 'final') => Promise<void>;
+  updateTournamentMatch: (matchId: 'semi1' | 'semi2' | 'final', winnerId: string) => Promise<void>;
+  deleteTournament: (tournamentId: string) => Promise<void>;
+  
   // Animation state
   evolvingPokemon: { from: PokemonInstance, to: PokemonInstance } | null;
   setEvolvingPokemon: (data: { from: PokemonInstance, to: PokemonInstance } | null) => void;

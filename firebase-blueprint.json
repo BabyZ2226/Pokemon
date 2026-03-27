@@ -75,6 +75,35 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["senderId", "receiverId", "status", "createdAt"]
+    },
+    "Matchmaking": {
+      "title": "Matchmaking",
+      "description": "A player looking for a match.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "team": { "type": "array", "items": { "$ref": "PokemonInstance" } },
+        "hp": { "type": "array", "items": { "type": "number" } },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "uid", "userName", "team", "hp", "createdAt"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "A 4-player tournament.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "hostId": { "type": "string" },
+        "players": { "type": "array", "items": { "type": "object" } },
+        "status": { "type": "string", "enum": ["waiting", "semifinals", "finals", "finished"] },
+        "matches": { "type": "object" },
+        "winnerId": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "hostId", "players", "status", "matches", "createdAt"]
     }
   },
   "firestore": {
@@ -89,6 +118,14 @@
     "/friendRequests/{requestId}": {
       "schema": { "$ref": "FriendRequest" },
       "description": "Friend requests."
+    },
+    "/matchmaking/{userId}": {
+      "schema": { "$ref": "Matchmaking" },
+      "description": "Matchmaking entries."
+    },
+    "/tournaments/{tournamentId}": {
+      "schema": { "$ref": "Tournament" },
+      "description": "Tournaments."
     }
   }
 }

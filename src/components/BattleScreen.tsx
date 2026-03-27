@@ -162,6 +162,7 @@ export default function BattleScreen({ onComplete }: { onComplete: () => void })
                 src={playerTeam[pIndex]?.sprite} 
                 alt="Player" 
                 className="w-24 h-24 md:w-32 md:h-32 object-contain relative z-10" 
+                referrerPolicy="no-referrer"
                 animate={{ y: [0, -5, 0] }}
                 transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
               />
@@ -193,6 +194,7 @@ export default function BattleScreen({ onComplete }: { onComplete: () => void })
                 src={enemyTeam[eIndex]?.sprite} 
                 alt="Enemy" 
                 className="w-20 h-20 md:w-28 md:h-28 object-contain relative z-10" 
+                referrerPolicy="no-referrer"
                 animate={{ y: [0, -3, 0] }}
                 transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
               />

@@ -201,7 +201,9 @@ async function startServer() {
           p1Fainted: false,
           p2Fainted: false
         };
-        const p1First = poke1.baseStats.spe >= poke2.baseStats.spe;
+        const speed1 = calculateActualStat(poke1, "spe");
+        const speed2 = calculateActualStat(poke2, "spe");
+        const p1First = speed1 > speed2 || speed1 === speed2 && Math.random() < 0.5;
         const resolveAttack = (attacker, defender, move2, attackerState, defenderState, isP1Attacking) => {
           const res = calculateDamage({
             attacker,

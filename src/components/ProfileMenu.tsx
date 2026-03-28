@@ -31,7 +31,7 @@ export function ProfileMenu({ user, isSyncing }: ProfileMenuProps) {
         <>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <img src={user.photoURL || ''} alt="Profile" className="w-8 h-8 rounded-xl border border-white/10 shadow-lg" />
+              <img loading="lazy" src={user.photoURL || ''} alt="Profile" className="w-8 h-8 rounded-xl border border-white/10 shadow-lg" />
               <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-zinc-900 ${isSyncing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
             </div>
             <div className="hidden md:block">

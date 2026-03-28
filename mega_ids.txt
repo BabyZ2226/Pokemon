@@ -1,0 +1,19 @@
+  megaId?: number;
+  megaIdX?: number;
+  megaIdY?: number;
+    "megaId": 10300
+    "megaId": 10301
+    "megaId": 10075
+    "megaId": 10315
+    "megaId": 10316
+    "megaId": 10302
+    "megaId": 10318
+    "megaId": 10319
+    "megaId": 10303
+    "megaId": 10320
+    "megaId": 10321
+    "megaId": 10324
+    "megaId": 10325
+      if (megaStone?.includes(' X') && base.megaIdX) spriteId = base.megaIdX;
+      else if (megaStone?.includes(' Y') && base.megaIdY) spriteId = base.megaIdY;
+      else if (base.megaId) spriteId = base.megaId;

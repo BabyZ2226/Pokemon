@@ -51,28 +51,29 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ inventory, roster, o
                 <button
                   key={item.id}
                   onClick={() => setSelectedItem(item.id)}
-                  className={`p-4 rounded-xl border text-left transition-all ${
+                  className={`p-4 rounded-xl border text-left transition-all card-shine glass-card ${
                     selectedItem === item.id 
-                      ? 'bg-indigo-500/20 border-indigo-500/50' 
+                      ? 'bg-indigo-500/20 border-indigo-500/50 shadow-lg shadow-indigo-500/10' 
                       : 'bg-zinc-900/50 border-white/5 hover:bg-zinc-800/50'
                   }`}
                 >
-                  <div className="flex justify-between items-start mb-2">
+                  <div className="flex justify-between items-start mb-2 relative z-10">
                     <div className="flex items-center gap-2">
                       <img 
+                        loading="lazy"
                         src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${item.type === 'stone' ? `${item.id}-stone` : item.id}.png`} 
                         alt={item.name} 
-                        className="w-8 h-8 object-contain" 
+                        className="w-8 h-8 object-contain drop-shadow-lg" 
                         referrerPolicy="no-referrer"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = 'https://via.placeholder.com/32';
                         }}
                       />
-                      <span className="font-bold text-white">{item.name}</span>
+                      <span className="font-black text-white uppercase italic tracking-tighter text-sm">{item.name}</span>
                     </div>
-                    <span className="text-xs font-black text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-lg">x{item.quantity}</span>
+                    <span className="text-[10px] font-black text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-500/20">x{item.quantity}</span>
                   </div>
-                  <p className="text-xs text-zinc-400 capitalize">{item.type.replace('_', ' ')}</p>
+                  <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest relative z-10">{item.type.replace('_', ' ')}</p>
                 </button>
               ))}
             </div>
@@ -93,7 +94,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ inventory, roster, o
                       : 'bg-zinc-900/50 border-white/5 hover:bg-zinc-800/50'
                   }`}
                 >
-                  <img src={pokemon.sprite} alt={pokemon.name} className="w-12 h-12 object-contain" />
+                  <img loading="lazy" src={pokemon.sprite} alt={pokemon.name} className="w-12 h-12 object-contain" />
                   <div className="text-left">
                     <div className="font-bold text-white text-sm">{pokemon.name}</div>
                     <div className="text-xs text-zinc-500">Nv. {pokemon.level}</div>

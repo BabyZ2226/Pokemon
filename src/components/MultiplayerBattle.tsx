@@ -1,12 +1,14 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { Swords, Shield, Zap, Heart } from 'lucide-react';
+import { Swords, Shield, Zap, Heart, X, Trophy as TrophyIcon, CloudRain, Sun, Wind, CloudSnow } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getPokemonImage } from '../App';
 import { calculateActualStat } from '../utils/battleLogic';
 
 export default function MultiplayerBattle() {
   const { userId, currentRoom, currentTournament, submitMultiplayerMove, switchMultiplayerPokemon, leaveRoom, fleeMultiplayerBattle, resetRoomToWaiting } = useGameStore();
-  const [showFleeConfirm, setShowFleeConfirm] = React.useState(false);
+  const [showFleeConfirm, setShowFleeConfirm] = useState(false);
+  const [isAttacking, setIsAttacking] = useState<'player' | 'enemy' | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,252 +32,317 @@ export default function MultiplayerBattle() {
 
   const isMyTurn = currentRoom.currentTurnId === userId && currentRoom.status === 'playing';
 
+  const handleMove = async (move: any) => {
+    setIsAttacking('player');
+    await new Promise(r => setTimeout(r, 500));
+    submitMultiplayerMove(move);
+    setIsAttacking(null);
+  };
+
   return (
-    <div className="flex flex-col h-full bg-zinc-950 overflow-hidden relative">
-      {/* Battle Arena */}
-      <div className="flex-1 relative overflow-hidden flex flex-col">
-        {/* Background Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-900/20 via-transparent to-red-900/20 pointer-events-none" />
+    <div className="fixed inset-0 z-[100] bg-zinc-950 flex flex-col overflow-hidden font-sans">
+      {/* Global Scanline Effect */}
+      <div className="absolute inset-0 pointer-events-none z-[1000] overflow-hidden">
+        <div className="absolute inset-0 scanline opacity-[0.03]" />
+      </div>
+      
+      {/* Header */}
+      <div className="bg-zinc-900/80 backdrop-blur-xl p-6 border-b border-white/10 flex justify-between items-center relative z-20">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <Swords size={20} className="text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">Combate Multijugador</h2>
+            <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Sala: {currentRoom.roomCode}</p>
+          </div>
+        </div>
         
-        {/* Opponent Side */}
-        <div className="flex-1 flex items-center justify-end px-12 relative">
+        <div className="flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-3 bg-white/5 px-4 py-2 rounded-xl border border-white/10">
+            <Zap size={14} className="text-amber-400" />
+            <span className="text-xs font-black text-white uppercase tracking-widest">
+              {isMyTurn ? 'Tu Turno' : 'Turno del Rival'}
+            </span>
+          </div>
+          <button 
+            onClick={leaveRoom}
+            className="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl flex items-center justify-center text-zinc-400 transition-all"
+          >
+            <X size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* Weather Indicator */}
+      {currentRoom.weather && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-black/40 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
           <div className="flex flex-col items-center">
-            <AnimatePresence mode="wait">
-              <motion.div 
-                initial={{ x: 100, opacity: 0, scale: 0.8 }}
-                animate={{ x: 0, opacity: 1, scale: 1 }}
-                exit={{ x: 100, opacity: 0, scale: 0.8 }}
-                transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-                key={oppActive.id}
-                className="relative"
-              >
-                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-32 h-8 bg-black/40 rounded-[100%] blur-md" />
-                <img 
-                  src={oppActive.sprite} 
-                  alt={oppActive.name} 
-                  className="w-48 h-48 object-contain relative z-10" 
-                  referrerPolicy="no-referrer"
-                />
-              </motion.div>
-            </AnimatePresence>
+            <div className="text-[8px] font-black uppercase text-zinc-400 tracking-widest">Clima Actual</div>
+            <div className="flex items-center gap-2">
+              {currentRoom.weather === 'Rain' && <CloudRain size={16} className="text-blue-400" />}
+              {currentRoom.weather === 'Sun' && <Sun size={16} className="text-amber-400" />}
+              {currentRoom.weather === 'Sandstorm' && <Wind size={16} className="text-orange-400" />}
+              {currentRoom.weather === 'Hail' && <CloudSnow size={16} className="text-indigo-300" />}
+              {currentRoom.weather === 'Clear' && <Sun size={16} className="text-zinc-400" />}
+              <span className="text-sm font-black italic uppercase text-white tracking-tighter">{currentRoom.weather}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 relative flex flex-col md:flex-row overflow-hidden">
+        {/* Battle Arena */}
+        <div className="flex-1 relative overflow-hidden flex flex-col items-center justify-center p-4 md:p-12">
+          {/* Background */}
+          <div className="absolute inset-0 z-0">
+            <img 
+              loading="lazy"
+              src="https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=1920&q=80" 
+              alt="Battle Background" 
+              className="w-full h-full object-cover scale-110 blur-[2px] opacity-60"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/40 via-transparent to-zinc-950/80" />
             
-            <div className="mt-4 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-3 rounded-2xl w-64">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm font-black uppercase italic text-white">{oppActive.name}</span>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono">LVL {oppActive.level}</span>
+            {/* Weather Effects Overlay */}
+            {currentRoom.weather === 'Rain' && (
+              <div className="absolute inset-0 bg-blue-900/20 pointer-events-none z-10">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 animate-pulse" />
               </div>
-              <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden mb-1">
-                <motion.div 
-                  className={`h-full ${oppCurrentHp / oppMaxHp > 0.5 ? 'bg-emerald-500' : oppCurrentHp / oppMaxHp > 0.2 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                  initial={{ width: '100%' }}
-                  animate={{ width: `${(oppCurrentHp / oppMaxHp) * 100}%` }}
-                />
+            )}
+            {currentRoom.weather === 'Sun' && (
+              <div className="absolute inset-0 bg-amber-500/10 pointer-events-none z-10">
+                <div className="absolute inset-0 bg-gradient-radial from-amber-500/20 to-transparent opacity-40 animate-pulse" />
               </div>
-              <div className="flex justify-end">
-                <span className="text-[10px] font-bold text-zinc-400 font-mono">{Math.ceil(oppCurrentHp)} / {oppMaxHp} HP</span>
+            )}
+            {currentRoom.weather === 'Sandstorm' && (
+              <div className="absolute inset-0 bg-orange-900/20 pointer-events-none z-10">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dust.png')] opacity-30 animate-pulse" />
+              </div>
+            )}
+            {currentRoom.weather === 'Hail' && (
+              <div className="absolute inset-0 bg-indigo-100/10 pointer-events-none z-10">
+                <div className="absolute inset-0 bg-white/5 animate-pulse" />
+              </div>
+            )}
+          </div>
+
+          {/* Arena Elements */}
+          <div className="relative z-10 w-full max-w-5xl aspect-video flex items-center justify-center">
+            {/* VS Divider */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-px h-full bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 bg-zinc-950 border border-white/10 rounded-full flex items-center justify-center shadow-2xl">
+                <Swords size={40} className="text-white/20" />
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* VS Divider */}
-        <div className="h-px bg-zinc-800 w-full relative">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-zinc-950 px-4 py-1 border border-zinc-800 rounded-full text-[10px] font-black italic uppercase tracking-widest text-zinc-500">
-            VS
-          </div>
-        </div>
-
-        {/* My Side */}
-        <div className="flex-1 flex items-center justify-start px-12 relative">
-          <div className="flex flex-col items-center">
-            <div className="mb-4 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-3 rounded-2xl w-64">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm font-black uppercase italic text-white">{myActive.name}</span>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono">LVL {myActive.level}</span>
-              </div>
-              <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden mb-1">
+            {/* Player Pokemon */}
+            <div className="flex-1 flex flex-col items-center justify-center relative">
+              <AnimatePresence mode="wait">
                 <motion.div 
-                  className={`h-full ${myCurrentHp / myMaxHp > 0.5 ? 'bg-emerald-500' : myCurrentHp / myMaxHp > 0.2 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                  initial={{ width: '100%' }}
-                  animate={{ width: `${(myCurrentHp / myMaxHp) * 100}%` }}
-                />
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex gap-1">
-                  {me.team.map((p, i) => (
-                    <div key={i} className={`w-2 h-2 rounded-full ${me.hp[i] > 0 ? 'bg-blue-500' : 'bg-zinc-800'}`} />
-                  ))}
+                  key={myActive.id}
+                  initial={{ x: -100, opacity: 0, scale: 0.8 }}
+                  animate={{ 
+                    x: isAttacking === 'player' ? 50 : 0,
+                    opacity: 1, 
+                    scale: 1,
+                    y: [0, -10, 0]
+                  }}
+                  exit={{ x: -100, opacity: 0, scale: 0.8 }}
+                  transition={{ 
+                    y: { duration: 3, repeat: Infinity, ease: "easeInOut" },
+                    x: { type: "spring", stiffness: 300, damping: 20 }
+                  }}
+                  className="relative"
+                >
+                  {/* Base Platform */}
+                  <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-48 h-12 bg-indigo-500/20 rounded-full blur-xl animate-pulse" />
+                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-40 h-8 bg-gradient-to-b from-indigo-500/40 to-transparent rounded-[100%] border border-white/10" />
+                  
+                  <img 
+                    loading="lazy"
+                    src={getPokemonImage(myActive, true)} 
+                    alt={myActive.name}
+                    className="w-48 h-48 md:w-64 md:h-64 object-contain relative z-10 drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+                    referrerPolicy="no-referrer"
+                  />
+                </motion.div>
+              </AnimatePresence>
+
+              {/* Player HP Bar */}
+              <div className="mt-12 w-full max-w-xs bg-zinc-900/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 shadow-2xl relative z-20">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-black text-white uppercase italic">{myActive.name}</span>
+                  <span className="text-xs font-bold text-zinc-500">LVL {myActive.level}</span>
                 </div>
-                <span className="text-[10px] font-bold text-zinc-400 font-mono">{Math.ceil(myCurrentHp)} / {myMaxHp} HP</span>
+                <div className="h-3 bg-zinc-950 rounded-full overflow-hidden p-0.5 border border-white/5">
+                  <motion.div 
+                    className={`h-full rounded-full ${myCurrentHp / myMaxHp > 0.5 ? 'bg-emerald-500' : myCurrentHp / myMaxHp > 0.2 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                    animate={{ width: `${(myCurrentHp / myMaxHp) * 100}%` }}
+                    transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                  />
+                </div>
+                <div className="mt-1 text-[10px] font-black text-right text-zinc-500">{Math.ceil(myCurrentHp)} / {myMaxHp} HP</div>
               </div>
             </div>
 
-            <AnimatePresence mode="wait">
-              <motion.div 
-                initial={{ x: -100, opacity: 0, scale: 0.8 }}
-                animate={{ x: 0, opacity: 1, scale: 1 }}
-                exit={{ x: -100, opacity: 0, scale: 0.8 }}
-                transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-                key={myActive.id}
-                className="relative"
-              >
-                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-32 h-8 bg-black/40 rounded-[100%] blur-md" />
-                <img 
-                  src={myActive.sprite} 
-                  alt={myActive.name} 
-                  className="w-48 h-48 object-contain relative z-10" 
-                  referrerPolicy="no-referrer"
-                />
-              </motion.div>
+            {/* Enemy Pokemon */}
+            <div className="flex-1 flex flex-col items-center justify-center relative">
+              <AnimatePresence mode="wait">
+                <motion.div 
+                  key={oppActive.id}
+                  initial={{ x: 100, opacity: 0, scale: 0.8 }}
+                  animate={{ 
+                    x: isAttacking === 'enemy' ? -50 : 0,
+                    opacity: 1, 
+                    scale: 1,
+                    y: [0, -10, 0]
+                  }}
+                  exit={{ x: 100, opacity: 0, scale: 0.8 }}
+                  transition={{ 
+                    y: { duration: 2.5, repeat: Infinity, ease: "easeInOut" },
+                    x: { type: "spring", stiffness: 300, damping: 20 }
+                  }}
+                  className="relative"
+                >
+                  {/* Base Platform */}
+                  <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-48 h-12 bg-rose-500/20 rounded-full blur-xl animate-pulse" />
+                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-40 h-8 bg-gradient-to-b from-rose-500/40 to-transparent rounded-[100%] border border-white/10" />
+                  
+                  <img 
+                    loading="lazy"
+                    src={getPokemonImage(oppActive)} 
+                    alt={oppActive.name}
+                    className="w-48 h-48 md:w-64 md:h-64 object-contain relative z-10 drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+                    referrerPolicy="no-referrer"
+                  />
+                </motion.div>
+              </AnimatePresence>
+
+              {/* Enemy HP Bar */}
+              <div className="mt-12 w-full max-w-xs bg-zinc-900/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 shadow-2xl relative z-20">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-black text-white uppercase italic">{oppActive.name}</span>
+                  <span className="text-xs font-bold text-zinc-500">LVL {oppActive.level}</span>
+                </div>
+                <div className="h-3 bg-zinc-950 rounded-full overflow-hidden p-0.5 border border-white/5">
+                  <motion.div 
+                    className={`h-full rounded-full ${oppCurrentHp / oppMaxHp > 0.5 ? 'bg-emerald-500' : oppCurrentHp / oppMaxHp > 0.2 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                    animate={{ width: `${(oppCurrentHp / oppMaxHp) * 100}%` }}
+                    transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                  />
+                </div>
+                <div className="mt-1 text-[10px] font-black text-right text-zinc-500">{Math.ceil(oppCurrentHp)} / {oppMaxHp} HP</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Battle Log */}
+        <div className="w-full md:w-96 bg-zinc-900/50 backdrop-blur-2xl border-l border-white/10 flex flex-col relative z-20">
+          <div className="p-6 border-b border-white/10 bg-zinc-900/50">
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Registro de Combate</h3>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+            <AnimatePresence>
+              {currentRoom.logs.map((log, i) => (
+                <motion.div 
+                  key={i}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={`p-4 rounded-2xl border text-xs font-bold leading-relaxed bg-white/5 border-white/10 text-zinc-400`}
+                >
+                  <span className="text-zinc-600 mr-2">[{i + 1}]</span>
+                  {log}
+                </motion.div>
+              ))}
             </AnimatePresence>
+            <div ref={logEndRef} />
           </div>
         </div>
       </div>
 
-      {/* Controls & Logs */}
-      <div className="h-72 bg-zinc-900 border-t border-zinc-800 flex">
-        {/* Logs */}
-        <div className="flex-1 p-6 border-r border-zinc-800 overflow-y-auto custom-scrollbar bg-black/20">
-          <div className="space-y-2">
-            {currentRoom.logs.map((log, i) => (
-              <motion.p 
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                key={i} 
-                className="text-zinc-400 font-mono text-xs leading-relaxed"
-              >
-                <span className="text-zinc-600 mr-2">[{i + 1}]</span>
-                {log}
-              </motion.p>
-            ))}
-            <div ref={logEndRef} />
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="w-96 p-6 flex flex-col gap-4">
-          {currentRoom.status === 'finished' ? (
-            <div className="h-full flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center mb-4 border border-yellow-500/30">
-                <Swords className="w-8 h-8 text-yellow-500" />
-              </div>
-              <h3 className="text-2xl font-black italic uppercase text-white mb-2">
-                {currentRoom.winnerId === userId ? '¡VICTORIA!' : 'DERROTA'}
-              </h3>
-              <div className="flex flex-col gap-2 mt-4">
-                {currentTournament ? (
-                  <button 
-                    onClick={leaveRoom}
-                    className="px-8 py-2 bg-blue-600 text-white rounded-full font-bold uppercase italic text-sm hover:scale-105 transition-all"
-                  >
-                    Volver al Torneo
-                  </button>
-                ) : (
-                  <>
-                    <button 
-                      onClick={resetRoomToWaiting}
-                      className="px-8 py-2 bg-blue-600 text-white rounded-full font-bold uppercase italic text-sm hover:scale-105 transition-all"
-                    >
-                      Volver a la Sala
-                    </button>
-                    <button 
-                      onClick={leaveRoom}
-                      className="px-8 py-2 bg-white text-black rounded-full font-bold uppercase italic text-sm hover:scale-105 transition-all"
-                    >
-                      Salir al Lobby
-                    </button>
-                  </>
-                )}
-              </div>
+      {/* Controls */}
+      <div className="p-8 bg-zinc-900/80 backdrop-blur-2xl border-t border-white/10 relative z-30">
+        {currentRoom.status === 'finished' ? (
+          <div className="flex flex-col items-center justify-center text-center">
+            <div className={`w-16 h-16 rounded-2xl mb-4 flex items-center justify-center shadow-2xl ${currentRoom.winnerId === userId ? 'bg-emerald-500 shadow-emerald-500/40' : 'bg-rose-500 shadow-rose-500/40'}`}>
+              {currentRoom.winnerId === userId ? <TrophyIcon size={32} className="text-white" /> : <X size={32} className="text-white" />}
             </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500 italic">Tus Movimientos</h3>
-                {isMyTurn ? (
-                  myCurrentHp <= 0 ? (
-                    <span className="px-2 py-0.5 bg-red-500 text-white text-[8px] font-bold rounded uppercase animate-bounce">¡Cambia de Pokémon!</span>
-                  ) : (
-                    <span className="px-2 py-0.5 bg-blue-500 text-white text-[8px] font-bold rounded uppercase animate-pulse">Tu Turno</span>
-                  )
-                ) : (
-                  <span className="px-2 py-0.5 bg-zinc-800 text-zinc-500 text-[8px] font-bold rounded uppercase">Turno Rival</span>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                {myActive.moves.map((move, i) => (
+            <h3 className="text-3xl font-black italic uppercase text-white mb-2">
+              {currentRoom.winnerId === userId ? '¡VICTORIA!' : 'DERROTA'}
+            </h3>
+            <div className="flex gap-4 mt-6">
+              {currentTournament ? (
+                <button onClick={leaveRoom} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase italic text-sm hover:scale-105 transition-all shadow-xl shadow-indigo-500/20">Volver al Torneo</button>
+              ) : (
+                <>
+                  <button onClick={resetRoomToWaiting} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase italic text-sm hover:scale-105 transition-all shadow-xl shadow-indigo-500/20">Volver a la Sala</button>
+                  <button onClick={leaveRoom} className="px-10 py-4 bg-white text-black rounded-2xl font-black uppercase italic text-sm hover:scale-105 transition-all shadow-xl">Salir al Lobby</button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Moves */}
+            <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+              {myActive.moves.map((move, i) => (
+                <button
+                  key={i}
+                  disabled={!isMyTurn || myCurrentHp <= 0}
+                  onClick={() => handleMove(move)}
+                  className={`group relative p-4 rounded-2xl border text-left transition-all overflow-hidden ${
+                    isMyTurn && myCurrentHp > 0
+                      ? 'bg-white/5 border-white/10 hover:border-indigo-500/50 hover:bg-white/10' 
+                      : 'bg-zinc-950/50 border-white/5 opacity-50 cursor-not-allowed'
+                  }`}
+                >
+                  <div className="relative z-10">
+                    <span className="block text-sm font-black italic uppercase text-white truncate group-hover:text-indigo-400 transition-colors">{move.name}</span>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="px-2 py-0.5 rounded-md bg-white/5 text-[8px] font-black text-zinc-400 uppercase tracking-widest">{move.type}</span>
+                      <span className="text-[10px] font-black text-indigo-400 uppercase">PWR {move.power}</span>
+                    </div>
+                  </div>
+                  {isMyTurn && <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-500/5 to-indigo-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />}
+                </button>
+              ))}
+            </div>
+
+            {/* Team & Flee */}
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-wrap gap-3">
+                {me.team.map((p, i) => (
                   <button
                     key={i}
-                    disabled={!isMyTurn || myCurrentHp <= 0}
-                    onClick={() => submitMultiplayerMove(move)}
-                    className={`p-3 rounded-xl border text-left transition-all relative overflow-hidden group ${
-                      isMyTurn && myCurrentHp > 0
-                        ? 'bg-zinc-800 border-zinc-700 hover:border-blue-500/50 hover:bg-zinc-700' 
-                        : 'bg-zinc-950 border-zinc-900 opacity-50 cursor-not-allowed'
+                    disabled={!isMyTurn || i === me.activeIdx || me.hp[i] <= 0}
+                    onClick={() => switchMultiplayerPokemon(i)}
+                    className={`w-14 h-14 rounded-2xl border flex items-center justify-center overflow-hidden transition-all relative group ${
+                      i === me.activeIdx 
+                        ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/20' 
+                        : me.hp[i] <= 0 
+                          ? 'border-white/5 bg-zinc-950 opacity-30 cursor-not-allowed grayscale'
+                          : isMyTurn 
+                            ? 'border-white/10 bg-white/5 hover:border-white/30 hover:bg-white/10' 
+                            : 'border-white/5 bg-zinc-950 opacity-50'
                     }`}
                   >
-                    <span className="block text-[10px] font-black italic uppercase text-white truncate">{move.name}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[8px] font-bold text-zinc-500 uppercase">{move.type}</span>
-                      <span className="text-[8px] font-bold text-blue-400 uppercase">PWR {move.power}</span>
-                    </div>
+                    <img loading="lazy" src={getPokemonImage(p)} alt={p.name} className="w-12 h-12 object-contain group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
+                    {me.hp[i] <= 0 && <div className="absolute inset-0 bg-rose-500/20 flex items-center justify-center"><X size={16} className="text-rose-500" /></div>}
                   </button>
                 ))}
               </div>
-
-              <div className="mt-auto">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 italic">Cambiar Pokémon</h3>
-                  {!showFleeConfirm ? (
-                    <button
-                      onClick={() => setShowFleeConfirm(true)}
-                      className="text-[8px] font-black uppercase tracking-widest text-red-500 hover:text-red-400 transition-colors border border-red-500/30 px-2 py-0.5 rounded bg-red-500/10"
-                    >
-                      Huir del Combate
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[8px] font-bold text-red-400 uppercase animate-pulse">¿Seguro?</span>
-                      <button
-                        onClick={fleeMultiplayerBattle}
-                        className="text-[8px] font-black uppercase tracking-widest text-white bg-red-600 px-2 py-0.5 rounded hover:bg-red-500 transition-colors"
-                      >
-                        Sí, huir
-                      </button>
-                      <button
-                        onClick={() => setShowFleeConfirm(false)}
-                        className="text-[8px] font-black uppercase tracking-widest text-zinc-400 hover:text-white transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  {me.team.map((p, i) => (
-                    <button
-                      key={i}
-                      disabled={!isMyTurn || i === me.activeIdx || me.hp[i] <= 0}
-                      onClick={() => switchMultiplayerPokemon(i)}
-                      className={`w-10 h-10 rounded-lg border flex items-center justify-center overflow-hidden transition-all ${
-                        i === me.activeIdx 
-                          ? 'border-blue-500 bg-blue-500/10' 
-                          : me.hp[i] <= 0 
-                            ? 'border-zinc-900 bg-zinc-950 opacity-30 cursor-not-allowed'
-                            : isMyTurn 
-                              ? 'border-zinc-800 bg-zinc-900 hover:border-zinc-600' 
-                              : 'border-zinc-900 bg-zinc-950 opacity-50'
-                      }`}
-                    >
-                      <img src={p.sprite} alt={p.name} className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+              <button
+                onClick={() => fleeMultiplayerBattle()}
+                className="w-full py-4 bg-rose-600/10 hover:bg-rose-600 border border-rose-600/20 hover:border-rose-600 text-rose-500 hover:text-white rounded-2xl font-black uppercase italic text-xs transition-all shadow-lg active:scale-95"
+              >
+                Huir del Combate
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

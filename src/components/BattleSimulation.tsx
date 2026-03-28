@@ -108,7 +108,7 @@ export default function BattleSimulation({ playerTeam }: { playerTeam: PokemonIn
             <div className="absolute top-0 right-0 p-4 text-[10px] font-black text-zinc-600 uppercase tracking-widest">Atacante</div>
             <div className="flex items-center gap-5 mb-6">
               <div className="w-20 h-20 bg-black/40 rounded-2xl flex items-center justify-center border border-white/5 group-hover:border-indigo-500/30 transition-colors">
-                <img src={attacker.sprite} alt={attacker.name} className="w-16 h-16 object-contain drop-shadow-xl" style={{ imageRendering: 'pixelated' }} />
+                <img loading="lazy" src={attacker.sprite} alt={attacker.name} className="w-16 h-16 object-contain drop-shadow-xl" style={{ imageRendering: 'pixelated' }} />
               </div>
               <div>
                 <div className="font-black text-2xl italic tracking-tighter text-white uppercase">{attacker.name}</div>
@@ -140,7 +140,7 @@ export default function BattleSimulation({ playerTeam }: { playerTeam: PokemonIn
             <div className="absolute top-0 right-0 p-4 text-[10px] font-black text-zinc-600 uppercase tracking-widest">Defensor</div>
             <div className="flex items-center gap-5 mb-6">
               <div className="w-20 h-20 bg-black/40 rounded-2xl flex items-center justify-center border border-white/5 group-hover:border-rose-500/30 transition-colors">
-                <img src={defender.sprite} alt={defender.name} className="w-16 h-16 object-contain drop-shadow-xl" style={{ imageRendering: 'pixelated' }} />
+                <img loading="lazy" src={defender.sprite} alt={defender.name} className="w-16 h-16 object-contain drop-shadow-xl" style={{ imageRendering: 'pixelated' }} />
               </div>
               <div>
                 <div className="font-black text-2xl italic tracking-tighter text-white uppercase">{defender.name}</div>

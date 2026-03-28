@@ -87,6 +87,24 @@ export interface PokemonInstance {
   // New fields
   happiness: number; // 0 - 255
   megaEvolved: boolean;
+  matchesPlayed?: number;
+}
+
+export interface BattlePassReward {
+  tier: number;
+  type: 'coins' | 'stardust' | 'tp' | 'item' | 'pokemon';
+  amount?: number;
+  value?: any;
+  isPremium: boolean;
+  name: string;
+}
+
+export interface BattlePass {
+  level: number;
+  exp: number;
+  claimedFree: number[];
+  claimedPremium: number[];
+  isPremium: boolean;
 }
 
 export interface Facilities {
@@ -152,6 +170,7 @@ export interface MultiplayerRoom {
   roomCode?: string;
   mode?: 'Competitive' | 'Free';
   status: 'waiting' | 'playing' | 'finished';
+  weather?: Weather;
   player1: MultiplayerPlayer;
   player2: MultiplayerPlayer | null;
   currentTurnId: string;
@@ -205,6 +224,7 @@ export interface GameState {
   missions: Mission[];
   leagueLevel: number;
   pokedex: number[]; // Array of pokedex numbers collected
+  history: string[];
 
   // Management
   facilities: Facilities;
@@ -229,6 +249,7 @@ export interface GameState {
   removeItem: (itemId: string, quantity: number) => boolean;
   setCoins: (amount: number) => void;
   setEnergy: (amount: number) => void;
+  addBandages: (amount: number) => void;
   updatePokemon: (id: string, updates: Partial<PokemonInstance>) => void;
   updateMissionProgress: (action: string, amount: number) => void;
   
@@ -273,4 +294,11 @@ export interface GameState {
   // Animation state
   evolvingPokemon: { from: PokemonInstance, to: PokemonInstance } | null;
   setEvolvingPokemon: (data: { from: PokemonInstance, to: PokemonInstance } | null) => void;
+
+  // Daily Reward & Battle Pass
+  lastDailyReward: number;
+  battlePass: BattlePass;
+  claimDailyReward: () => { coins: number, stardust: number, item?: string };
+  addBattlePassExp: (amount: number) => void;
+  claimBattlePassReward: (tier: number) => void;
 }

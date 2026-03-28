@@ -14,7 +14,7 @@ interface MultiplayerTabProps {
   onWin?: () => void;
 }
 
-const MultiplayerTab: React.FC<MultiplayerTabProps> = ({ roster: propsRoster, activeTeamIds: propsActiveTeamIds, onWin }) => {
+const MultiplayerTab: React.FC<MultiplayerTabProps> = React.memo(({ roster: propsRoster, activeTeamIds: propsActiveTeamIds, onWin }) => {
   const { 
     userId, 
     userName, 
@@ -400,7 +400,7 @@ const MultiplayerTab: React.FC<MultiplayerTabProps> = ({ roster: propsRoster, ac
             <div className="flex gap-2">
               {currentRoom.player1.team.map((p, i) => (
                 <div key={i} className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden">
-                  <img src={p.sprite} alt={p.name} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                  <img loading="lazy" src={p.sprite} alt={p.name} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                 </div>
               ))}
             </div>
@@ -422,7 +422,7 @@ const MultiplayerTab: React.FC<MultiplayerTabProps> = ({ roster: propsRoster, ac
                 <div className="flex gap-2">
                   {currentRoom.player2.team.map((p, i) => (
                     <div key={i} className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden">
-                      <img src={p.sprite} alt={p.name} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                      <img loading="lazy" src={p.sprite} alt={p.name} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                     </div>
                   ))}
                 </div>
@@ -495,7 +495,7 @@ const MultiplayerTab: React.FC<MultiplayerTabProps> = ({ roster: propsRoster, ac
                   <div className="flex flex-wrap gap-4">
                     {freeModeTeam.map((p) => (
                       <div key={p.id} className="relative group w-24 h-24 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-                        <img src={p.sprite} alt={p.name} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+                        <img loading="lazy" src={p.sprite} alt={p.name} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
                         <button 
                           onClick={() => handleRemovePokemonFromFreeTeam(p.id)}
                           className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -540,6 +540,7 @@ const MultiplayerTab: React.FC<MultiplayerTabProps> = ({ roster: propsRoster, ac
                             className="flex items-center gap-3 p-2 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-emerald-500/50 transition-all"
                           >
                             <img 
+                              loading="lazy"
                               src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${p.id}.png`} 
                               alt={p.name} 
                               className="w-10 h-10 object-contain" 
@@ -563,7 +564,7 @@ const MultiplayerTab: React.FC<MultiplayerTabProps> = ({ roster: propsRoster, ac
                       if (!p) return null;
                       return (
                         <div key={id} className="w-20 h-20 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center relative">
-                          <img src={p.sprite} alt={p.name} className="w-14 h-14 object-contain" referrerPolicy="no-referrer" />
+                          <img loading="lazy" src={p.sprite} alt={p.name} className="w-14 h-14 object-contain" referrerPolicy="no-referrer" />
                           <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-zinc-800 rounded text-[8px] font-bold text-zinc-400 uppercase">LVL {p.level}</div>
                         </div>
                       );
@@ -804,6 +805,6 @@ const MultiplayerTab: React.FC<MultiplayerTabProps> = ({ roster: propsRoster, ac
       </div>
     </div>
   );
-};
+});
 
 export default MultiplayerTab;

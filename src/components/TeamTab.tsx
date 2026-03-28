@@ -62,10 +62,10 @@ export default function TeamTab() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     key={pokemon.instanceId || pokemon.id} 
-                    className={`group relative p-5 rounded-[2rem] border transition-all duration-300 cursor-pointer overflow-hidden ${
+                    className={`group relative p-5 rounded-[2rem] border transition-all duration-300 cursor-pointer overflow-hidden card-shine ${
                       isActive 
                         ? 'bg-indigo-600/10 border-indigo-500/50 shadow-lg shadow-indigo-600/5' 
-                        : 'bg-black/40 border-white/5 hover:border-white/10 hover:bg-zinc-900/40'
+                        : 'bg-black/40 border-white/5 hover:border-white/10 hover:bg-zinc-900/40 glass-card'
                     }`}
                     onClick={() => setSelectedPokemon(pokemon)}
                   >
@@ -81,7 +81,7 @@ export default function TeamTab() {
                       <div className={`w-20 h-20 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 duration-500 ${
                         isActive ? 'bg-indigo-500/20' : 'bg-zinc-800/50'
                       }`}>
-                        <img src={pokemon.sprite} alt={pokemon.name} className="w-16 h-16 object-contain drop-shadow-2xl" />
+                        <img loading="lazy" src={pokemon.sprite} alt={pokemon.name} className="w-16 h-16 object-contain drop-shadow-2xl" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start gap-2">
@@ -136,7 +136,7 @@ export default function TeamTab() {
             <div className="space-y-8">
               <div className="flex flex-col items-center text-center p-6 bg-black/40 rounded-[2.5rem] border border-white/5 relative overflow-hidden group">
                 <div className="absolute inset-0 bg-indigo-600/5 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-                <img src={selectedPokemon.sprite} alt={selectedPokemon.name} className="w-32 h-32 object-contain mb-4 drop-shadow-[0_0_20px_rgba(255,255,255,0.2)] relative z-10" />
+                <img loading="lazy" src={selectedPokemon.sprite} alt={selectedPokemon.name} className="w-32 h-32 object-contain mb-4 drop-shadow-[0_0_20px_rgba(255,255,255,0.2)] relative z-10" />
                 <h4 className="text-2xl font-black text-white uppercase italic tracking-tighter relative z-10">{selectedPokemon.name}</h4>
                 <div className="flex items-center gap-3 mt-2 relative z-10">
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">NV. {selectedPokemon.level}</span>

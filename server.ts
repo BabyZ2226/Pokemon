@@ -4,7 +4,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
-import { calculateDamage } from "./src/utils/battleLogic";
+import { calculateDamage, calculateActualStat } from "./src/utils/battleLogic";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -116,7 +116,9 @@ async function startServer() {
         };
 
         // Speed check for turn order
-        const p1First = poke1.baseStats.spe >= poke2.baseStats.spe;
+        const speed1 = calculateActualStat(poke1, 'spe');
+        const speed2 = calculateActualStat(poke2, 'spe');
+        const p1First = speed1 > speed2 || (speed1 === speed2 && Math.random() < 0.5);
 
         const resolveAttack = (attacker: any, defender: any, move: any, attackerState: any, defenderState: any, isP1Attacking: boolean) => {
           const res = calculateDamage({

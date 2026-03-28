@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { GameState, PokemonInstance, Facilities, Staff, MultiplayerRoom } from '../types';
+import { GameState, PokemonInstance, Facilities, Staff, MultiplayerRoom, Weather } from '../types';
 import { doc, onSnapshot, updateDoc, getFirestore, addDoc, collection, query, where, getDocs, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
 import { calculateDamage, calculateActualStat } from '../utils/battleLogic';
 import { handleFirestoreError, OperationType } from '../utils/firestoreError';
 import { Tournament, TournamentMatch, MultiplayerPlayer } from '../types';
+
+import { BATTLE_PASS_REWARDS } from '../constants';
 
 const INITIAL_FACILITIES: Facilities = {
   stadiumLevel: 1,
@@ -48,6 +50,7 @@ export const useGameStore = create<DevGameState>()(
 
       roster: [],
       activeTeamIds: [],
+      history: [],
 
       userId: Math.random().toString(36).substring(2, 15),
       uid: '',
@@ -116,9 +119,13 @@ export const useGameStore = create<DevGameState>()(
           return p ? calculateActualStat(p, 'hp') : 100;
         }));
 
+        const weathers: Weather[] = ['Clear', 'Rain', 'Sun', 'Sandstorm', 'Hail'];
+        const weather = weathers[Math.floor(Math.random() * weathers.length)];
+
         const newRoom: Omit<MultiplayerRoom, 'id'> = {
           roomCode,
           status: 'waiting',
+          weather,
           player1: {
             id: state.userId,
             uid: state.uid,
@@ -229,11 +236,19 @@ export const useGameStore = create<DevGameState>()(
 
         const isPlayer1 = room.player1.id === state.userId;
         
+        const myActive = room.player1.team[0];
+        const oppActive = player2Data.team[0];
+        
+        const mySpe = calculateActualStat(myActive, 'spe');
+        const oppSpe = calculateActualStat(oppActive, 'spe');
+
+        const initialTurnId = mySpe >= oppSpe ? room.player1.id : state.userId;
+
         const updates: Partial<MultiplayerRoom> = {
           status: 'playing',
-          currentTurnId: room.player1.id,
+          currentTurnId: initialTurnId,
           updatedAt: Date.now(),
-          logs: [...room.logs, `¡Comienza el combate!`]
+          logs: [...room.logs, `¡Comienza el combate!`, `¡${initialTurnId === state.userId ? state.userName : room.player1.name} ataca primero por su mayor velocidad!`]
         };
 
         // Si el jugador 2 es quien inicia (o si se inicia con sus datos)
@@ -271,7 +286,7 @@ export const useGameStore = create<DevGameState>()(
           attacker: myActive,
           defender: oppActive,
           move,
-          weather: 'Clear',
+          weather: room.weather || 'Clear',
           isCritical: Math.random() < 0.05
         });
 
@@ -796,6 +811,85 @@ export const useGameStore = create<DevGameState>()(
 
       evolvingPokemon: null,
       setEvolvingPokemon: (data) => set({ evolvingPokemon: data }),
+
+      // Daily Reward & Battle Pass
+      lastDailyReward: 0,
+      battlePass: {
+        level: 1,
+        exp: 0,
+        claimedFree: [],
+        claimedPremium: [],
+        isPremium: false,
+      },
+
+      addBandages: (amount: number) => set((state) => ({ bandages: state.bandages + amount })),
+      claimDailyReward: () => {
+        const state = get();
+        const now = Date.now();
+        const oneDay = 24 * 60 * 60 * 1000;
+        
+        if (now - state.lastDailyReward < oneDay) {
+          throw new Error('Ya has reclamado tu recompensa diaria. Vuelve mañana.');
+        }
+
+        const coinsReward = Math.floor(Math.random() * 2000) + 1000;
+        const stardustReward = Math.floor(Math.random() * 500) + 250;
+        
+        set(s => ({
+          lastDailyReward: now,
+          coins: s.coins + coinsReward,
+          stardust: s.stardust + stardustReward,
+          history: [`🎁 ¡Recompensa diaria reclamada! +${coinsReward} Monedas, +${stardustReward} Polvos.`, ...s.history].slice(0, 10)
+        }));
+
+        return { coins: coinsReward, stardust: stardustReward };
+      },
+
+      addBattlePassExp: (amount) => {
+        set(s => {
+          let newExp = s.battlePass.exp + amount;
+          let newLevel = s.battlePass.level;
+          let expToNext = newLevel * 500;
+
+          while (newExp >= expToNext) {
+            newExp -= expToNext;
+            newLevel += 1;
+            expToNext = newLevel * 500;
+          }
+
+          return {
+            battlePass: {
+              ...s.battlePass,
+              level: newLevel,
+              exp: newExp
+            }
+          };
+        });
+      },
+
+      claimBattlePassReward: (tier) => {
+        const state = get();
+        if (state.battlePass.level < tier) throw new Error('Nivel insuficiente.');
+        if (state.battlePass.claimedFree.includes(tier)) throw new Error('Recompensa ya reclamada.');
+
+        const reward = BATTLE_PASS_REWARDS.find(r => r.tier === tier);
+        if (!reward) return;
+
+        set(s => {
+          const updates: any = {
+            battlePass: {
+              ...s.battlePass,
+              claimedFree: [...s.battlePass.claimedFree, tier]
+            }
+          };
+
+          if (reward.type === 'coins') updates.coins = s.coins + reward.value;
+          if (reward.type === 'stardust') updates.stardust = s.stardust + reward.value;
+          if (reward.type === 'tp') updates.trainingPoints = s.trainingPoints + reward.value;
+          
+          return updates;
+        });
+      },
 
       addCoins: (amount) => set((state) => ({ coins: state.coins + amount })),
       spendCoins: (amount) => {

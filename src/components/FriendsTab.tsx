@@ -5,7 +5,7 @@ import { collection, query, where, getDocs, doc, getDoc, setDoc, addDoc, serverT
 import { Friend, FriendRequest, MultiplayerRoom } from '../types';
 import { Users, UserPlus, Search, Check, X, Loader2, Swords } from 'lucide-react';
 
-export default function FriendsTab({ setActiveTab, roster: propRoster, activeTeamIds: propActiveTeamIds }: { setActiveTab?: (tab: string) => void, roster?: any[], activeTeamIds?: string[] }) {
+const FriendsTab = React.memo(function FriendsTab({ setActiveTab, roster: propRoster, activeTeamIds: propActiveTeamIds }: { setActiveTab?: (tab: string) => void, roster?: any[], activeTeamIds?: string[] }) {
   const store = useGameStore();
   const roster = propRoster || store.roster;
   const activeTeamIds = propActiveTeamIds || store.activeTeamIds;
@@ -307,4 +307,6 @@ export default function FriendsTab({ setActiveTab, roster: propRoster, activeTea
       </div>
     </div>
   );
-}
+});
+
+export default FriendsTab;

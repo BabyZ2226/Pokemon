@@ -3,7 +3,7 @@ import { useGameStore } from '../store/useGameStore';
 import { generatePokemon } from '../utils/pokemonGenerator';
 import { Rarity } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Package, Coins, Star } from 'lucide-react';
+import { Sparkles, Package, Coins, Star, Heart } from 'lucide-react';
 
 const PACKS = [
   { id: 'standard', name: 'Sobre Estándar', cost: 500, currency: 'coins', rarity: 'Common' as Rarity, color: 'from-zinc-600 via-zinc-700 to-zinc-900', shadow: 'shadow-zinc-500/50' },
@@ -13,7 +13,7 @@ const PACKS = [
 ];
 
 export default function StoreTab() {
-  const { coins, stardust, spendCoins, addPokemon, facilities } = useGameStore();
+  const { coins, stardust, spendCoins, addPokemon, facilities, addBandages } = useGameStore();
   const [openingState, setOpeningState] = useState<'idle' | 'shaking' | 'bursting' | 'revealed'>('idle');
   const [lastPulled, setLastPulled] = useState<any>(null);
   const [selectedPack, setSelectedPack] = useState<typeof PACKS[0] | null>(null);
@@ -113,6 +113,56 @@ export default function StoreTab() {
             </div>
           </motion.div>
         ))}
+      </div>
+
+      {/* Consumables Section */}
+      <div className="space-y-8">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-rose-600/20 rounded-xl flex items-center justify-center text-rose-400 border border-rose-500/20">
+            <Heart size={20} />
+          </div>
+          <h3 className="text-2xl md:text-4xl font-black text-white uppercase italic tracking-tighter">Consumibles</h3>
+          <div className="h-px bg-white/10 flex-1 ml-4" />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <motion.div 
+            whileHover={{ y: -10, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 rounded-[2.5rem] p-8 flex flex-col items-center text-center space-y-6 group hover:border-rose-500/50 transition-all relative overflow-hidden shadow-2xl"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            
+            <div className="w-32 h-40 bg-gradient-to-br from-rose-500 to-rose-700 rounded-2xl shadow-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500 relative overflow-hidden border border-white/20">
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/30 to-white/0 opacity-0 group-hover:opacity-100 group-hover:animate-shine pointer-events-none" />
+              <Heart size={64} className="text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]" />
+            </div>
+
+            <div className="space-y-2 relative z-10">
+              <h4 className="text-2xl font-black text-white uppercase italic tracking-tight">Pack de Banditas x5</h4>
+              <p className="text-zinc-500 text-xs font-medium leading-relaxed">Cura a tus Pokémon heridos durante la aventura.</p>
+            </div>
+
+            <div className="w-full space-y-4 relative z-10">
+              <div className="text-3xl font-black text-amber-400 flex items-center justify-center gap-2 italic tracking-tighter">
+                <Coins size={24} className="drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+                1,000
+              </div>
+              
+              <button 
+                onClick={() => {
+                  if (spendCoins(1000)) {
+                    addBandages(5);
+                  }
+                }}
+                disabled={coins < 1000}
+                className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-sm transition-all ${coins >= 1000 ? 'bg-white text-black hover:bg-rose-500 hover:text-white shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+              >
+                Comprar
+              </button>
+            </div>
+          </motion.div>
+        </div>
       </div>
 
       {/* Pack Opening Sequence */}

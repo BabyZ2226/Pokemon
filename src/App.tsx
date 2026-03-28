@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { MEGA_IDS } from './utils/megaIds';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Trophy, 
@@ -56,9 +57,11 @@ import {
   Cloud,
   LogIn,
   Swords,
-  UserPlus
+  UserPlus,
+  Gift
 } from 'lucide-react';
 import { ProfileMenu } from './components/ProfileMenu';
+import { BATTLE_PASS_REWARDS } from './constants';
 import { auth, googleProvider } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc, getFirestore } from 'firebase/firestore';
@@ -86,6 +89,14 @@ interface Move {
   category?: 'Physical' | 'Special' | 'Status';
   statusEffect?: StatusCondition;
   statusChance?: number;
+}
+
+export interface BattlePass {
+  level: number;
+  exp: number;
+  claimedFree: number[];
+  claimedPremium: number[];
+  isPremium: boolean;
 }
 
 export interface PokemonBase {
@@ -3689,6 +3700,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 300,
     "description": "Long considered a mythical POKéMON until recently when a small colony was found living underwater.",
     "stats": {
@@ -3710,6 +3722,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 420,
     "description": "A mystical POKéMON that exudes a gentle aura. Has the ability to change climate conditions.",
     "stats": {
@@ -3732,6 +3745,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 600,
     "description": "An extremely rarely seen marine POKéMON. Its intelligence is said to match that of humans.",
     "stats": {
@@ -3774,6 +3788,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "So rare that it is still said to be a mirage by many experts. Only a few people have seen it worldwide.",
     "stats": {
@@ -5813,6 +5828,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 300,
     "description": "It feeds on soil. After it has eaten a large mountain, it will fall asleep so it can grow.",
     "stats": {
@@ -5835,6 +5851,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 410,
     "description": "Its shell is as hard as sheet rock, and it is also very strong. Its THRASHING can topple a mountain.",
     "stats": {
@@ -5857,6 +5874,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 600,
     "description": "Its body can't be harmed by any sort of attack, so it is very eager to make challenges against enemies.",
     "stats": {
@@ -5923,6 +5941,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "This POKéMON wan­ ders across time. Grass and trees flourish in the forests in which it has appeared.",
     "stats": {
@@ -8501,6 +8520,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 300,
     "description": "Dreaming of one day flying, it practices by leaping off cliffs every day.",
     "stats": {
@@ -8522,6 +8542,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 420,
     "description": "Inside SHELGON’s armor-like shell, cells are in the midst of transformation to create an entirely new body. This POKéMON’s shell is extremely heavy, making its movements sluggish.",
     "stats": {
@@ -8544,6 +8565,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 600,
     "description": "SALAMENCE came about as a result of a strong, long-held dream of growing wings. It is said that this powerful desire triggered a sudden mutation in this POKéMON’s cells, causing it to sprout its magnificent wings.",
     "stats": {
@@ -8566,6 +8588,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 300,
     "description": "Instead of blood, a powerful magnetic force courses throughout BELDUM’s body. This POKéMON communicates with others by sending controlled pulses of magnetism.",
     "stats": {
@@ -8588,6 +8611,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 420,
     "description": "When two BELDUM fuse together, METANG is formed. The brains of the BELDUM are joined by a magnetic nervous system. By linking its brains magnetically, this POKéMON generates strong psychokinetic power.",
     "stats": {
@@ -8610,6 +8634,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 600,
     "description": "METAGROSS has four brains in total. Combined, the four brains can breeze through difficult calculations faster than a supercomputer. This POKéMON can float in the air by tucking in its four legs.",
     "stats": {
@@ -8803,6 +8828,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "A legend states that JIRACHI will make true any wish that is written on notes attached to its head when it awakens. If this POKéMON senses danger, it will fight without awakening.",
     "stats": {
@@ -8824,6 +8850,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "The DNA of a space virus underwent a sudden mutation upon exposure to a laser beam and resulted in DEOXYS. The crystalline organ on this POKéMON’s chest appears to be its brain.",
     "stats": {
@@ -10049,6 +10076,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 300,
     "description": "It nests in small, horizontal holes in cave walls. It pounces to catch prey that stray too close.",
     "stats": {
@@ -10071,6 +10099,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 410,
     "description": "There is a long-held belief that medicine made from its scales will heal even incurable illnesses.",
     "stats": {
@@ -10093,6 +10122,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 600,
     "description": "When it folds up its body and extends its wings, it looks like a jet plane. It flies at sonic speed.",
     "stats": {
@@ -11040,6 +11070,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 480,
     "description": "It drifts in warm seas. It always returns to where it was born, no matter how far it may have drifted.",
     "stats": {
@@ -11061,6 +11092,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "Born on a cold seafloor, it will swim great distances to return to its birthplace.",
     "stats": {
@@ -11082,6 +11114,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "It can lull people to sleep and make them dream. It is active during nights of the new moon.",
     "stats": {
@@ -11103,6 +11136,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "It lives in flower patches and avoids detection by curling up to look like a flowering plant.",
     "stats": {
@@ -11124,6 +11158,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 720,
     "description": "It is described in mythology as the Pokémon that shaped the universe with its 1,000 arms.",
     "stats": {
@@ -11146,6 +11181,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "This Pokémon brings victory. It is said that Trainers with Victini always win, regardless of the type of encounter.",
     "stats": {
@@ -14123,6 +14159,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 300,
     "description": "It tends to bite everything, and it is not a picky eater. Approaching it carelessly is dangerous.",
     "stats": {
@@ -14145,6 +14182,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 420,
     "description": "After it has eaten up all the food in its territory, it moves to another area. Its two heads do not get along.",
     "stats": {
@@ -14167,6 +14205,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 600,
     "description": "This brutal Pokémon travels the skies on its six wings. Anything that moves seems like a foe to it, triggering its attack.",
     "stats": {
@@ -14430,6 +14469,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 580,
     "description": "By blasting water from its hooves, it can glide across water. It excels at using leg moves while battling.",
     "stats": {
@@ -14452,6 +14492,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "Its melodies are sung with a special vocalization method that can control the feelings of those who hear it.",
     "stats": {
@@ -14474,6 +14515,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": true,
+    "rarity": "Singular (Mítico)",
     "baseStatsSum": 600,
     "description": "Over 300 million years ago, it was feared as the strongest of hunters. It has been modified by Team Plasma.",
     "stats": {
@@ -14709,6 +14751,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 423,
     "description": "With their powerful ears, they can heft boulders of a ton or more with ease. They can be a big help at construction sites.",
     "stats": {
@@ -15662,7 +15705,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
-    "rarity": "Común",
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 300,
     "description": "Es el Pokémon de tipo Dragón más débil. Habita en zonas oscuras y húmedas para evitar que su viscoso cuerpo se seque.",
     "stats": {
@@ -15684,7 +15727,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
-    "rarity": "Poco común",
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 452,
     "description": "Segrega una mucosidad que corroe todo lo que toca y consigue así ahuyentar al enemigo. Sus ojos han involucionado, por lo que no puede ver.",
     "stats": {
@@ -17431,7 +17474,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
-    "rarity": "Común",
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 300,
     "description": "Comunica sus sentimientos haciendo sonar sus escamas. El ruido metálico producido reverbera en las altas montañas donde habita.",
     "stats": {
@@ -17454,7 +17497,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
-    "rarity": "Poco común",
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 420,
     "description": "Se lanza sobre su presa entonando un grito de guerra. Golpea al enemigo y lo hace trizas con sus escamas.",
     "stats": {
@@ -19750,7 +19793,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
-    "rarity": "Común",
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 270,
     "description": "Habitaba los mares en tiempos inmemoriales. Ha revivido en forma de Pokémon de tipo Fantasma para vagar por su antigua morada.",
     "stats": {
@@ -19773,7 +19816,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
-    "rarity": "Poco común",
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 410,
     "description": "Vuela a una velocidad de 200 km/h. Lucha junto a un Dreepy, al que cuida hasta el momento de su evolución.",
     "stats": {
@@ -22259,7 +22302,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
-    "rarity": "Común",
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 320,
     "description": "Frigibax absorbs heat through its dorsal fin and converts the heat into ice energy. The higher the temperature, the more energy Frigibax stores.",
     "stats": {
@@ -22282,7 +22325,7 @@ export const POKEDEX_BASE: PokemonBase[] = [
     ],
     "isLegendary": false,
     "isMythical": false,
-    "rarity": "Poco común",
+    "rarity": "Pseudo-legendario",
     "baseStatsSum": 423,
     "description": "Arctibax freezes the air around it, protecting its face with an ice mask and turning its dorsal fin into a blade of ice.",
     "stats": {
@@ -23437,7 +23480,7 @@ const generatePokemon = async (base: PokemonBase, rarity: Rarity, targetLevel: n
 
 // --- Components ---
 
-const PokemonCardUI = ({ 
+const PokemonCardUI = React.memo(({ 
   pokemon, 
   onTrain, 
   onPowerUp, 
@@ -23470,8 +23513,21 @@ const PokemonCardUI = ({
 }) => {
   const config = RARITY_CONFIG[pokemon.rarity];
   
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    cardRef.current.style.setProperty('--mouse-x', `${x}%`);
+    cardRef.current.style.setProperty('--mouse-y', `${y}%`);
+  };
+
   return (
     <motion.div 
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
       layout
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
@@ -23482,11 +23538,25 @@ const PokemonCardUI = ({
       style={{ perspective: '1000px' }}
     >
       {/* Dynamic Holographic Overlay */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-30 pointer-events-none z-10 bg-[linear-gradient(110deg,transparent_20%,rgba(255,255,255,0.6)_40%,rgba(255,255,255,0.8)_50%,rgba(255,255,255,0.6)_60%,transparent_80%)] bg-[length:200%_100%] transition-opacity duration-500 animate-shine" />
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-40 pointer-events-none z-10 bg-[linear-gradient(110deg,transparent_20%,rgba(255,255,255,0.4)_40%,rgba(255,255,255,0.7)_50%,rgba(255,255,255,0.4)_60%,transparent_80%)] bg-[length:200%_100%] transition-opacity duration-500 animate-shine" />
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-20 pointer-events-none z-10 bg-[radial-gradient(circle_at_var(--mouse-x,50%)_var(--mouse-y,50%),rgba(255,255,255,0.8),transparent_50%)] transition-opacity duration-300" />
       
       {/* Rarity Specific Effects */}
       {(pokemon.rarity === 'Singular (Mítico)' || pokemon.rarity === 'Legendario' || pokemon.rarity === 'Ultraente' || pokemon.rarity === 'Pokémon Paradoja') && (
-        <div className="absolute inset-0 opacity-20 pointer-events-none z-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.2),transparent_70%)] animate-pulse" />
+        <>
+          <div className="absolute inset-0 opacity-30 pointer-events-none z-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.3),transparent_70%)] animate-pulse" />
+          <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+            {[...Array(5)].map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ y: '100%', x: `${Math.random() * 100}%`, opacity: 0 }}
+                animate={{ y: '-20%', opacity: [0, 1, 0] }}
+                transition={{ duration: 2 + Math.random() * 2, repeat: Infinity, delay: Math.random() * 2 }}
+                className="absolute w-1 h-1 bg-white rounded-full blur-[1px]"
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Selection Indicator */}
@@ -23501,6 +23571,8 @@ const PokemonCardUI = ({
         <div className="absolute top-12 right-3 z-30 group/item">
           <div className="bg-black/60 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-lg">
             <img 
+              loading="lazy"
+              decoding="async"
               src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${pokemon.item}.png`} 
               alt={pokemon.item}
               className="w-5 h-5 object-contain"
@@ -23546,6 +23618,7 @@ const PokemonCardUI = ({
         </div>
 
         <motion.img 
+          loading="lazy"
           src={getPokemonImage(pokemon)} 
           alt={pokemon.name}
           className={`w-28 h-28 xs:w-32 xs:h-32 sm:w-44 sm:h-44 object-contain relative z-10 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-500 animate-float ${pokemon.isInjured ? 'grayscale opacity-50' : ''}`}
@@ -23727,7 +23800,7 @@ const PokemonCardUI = ({
       </div>
     </motion.div>
   );
-};
+});
 
 // --- Main App ---
 
@@ -23741,18 +23814,33 @@ const CHAMPIONSHIP_TEAMS: LeagueTeam[] = [
   { id: 'champ-7', name: 'Cintia', logo: '👑', ovr: 750, points: 0, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0 },
 ];
 
-const getPokemonImage = (pokemon: any, isBack = false, isOfficial = false) => {
-  let id = pokemon.p ? pokemon.p.id : pokemon.id;
-  const isShiny = pokemon.p ? pokemon.p.isShiny : pokemon.isShiny;
-  const megaEvolved = pokemon.p ? pokemon.p.megaEvolved : pokemon.megaEvolved;
-  const megaStone = pokemon.p ? pokemon.p.megaStone : pokemon.megaStone;
+export const getPokemonImage = (pokemon: any, isBack = false, isOfficial = false) => {
+  const p = pokemon.p || pokemon;
+  const pokedexNumber = p.pokedexNumber || (typeof p.id === 'number' ? p.id : null);
+  const isShiny = p.isShiny;
+  const megaEvolved = p.megaEvolved;
+  const megaStone = p.megaStone;
   
-  if (megaEvolved) {
-    const base = POKEDEX_BASE.find(p => p.id === id);
+  let spriteId = pokedexNumber;
+  
+  // Try to find spriteId if pokedexNumber is missing but we have the name
+  if (!spriteId && p.name) {
+    const base = POKEDEX_BASE.find(b => b.name.toLowerCase() === p.name.toLowerCase());
+    if (base) spriteId = base.id;
+  }
+  
+  if (megaEvolved && spriteId) {
+    const base = POKEDEX_BASE.find(b => b.id === spriteId);
+    const megaData = MEGA_IDS[spriteId];
+    
     if (base) {
-      if (megaStone?.includes(' X') && base.megaIdX) id = base.megaIdX;
-      else if (megaStone?.includes(' Y') && base.megaIdY) id = base.megaIdY;
-      else if (base.megaId) id = base.megaId;
+      if (megaStone?.includes(' X') && base.megaIdX) spriteId = base.megaIdX;
+      else if (megaStone?.includes(' Y') && base.megaIdY) spriteId = base.megaIdY;
+      else if (base.megaId) spriteId = base.megaId;
+    } else if (megaData) {
+      if (megaStone?.includes(' X') && megaData.megaIdX) spriteId = megaData.megaIdX;
+      else if (megaStone?.includes(' Y') && megaData.megaIdY) spriteId = megaData.megaIdY;
+      else if (megaData.megaId) spriteId = megaData.megaId;
     }
   }
   
@@ -23760,11 +23848,11 @@ const getPokemonImage = (pokemon: any, isBack = false, isOfficial = false) => {
   const backStr = isBack ? 'back/' : '';
   const officialStr = isOfficial ? 'other/official-artwork/' : '';
   
-  if (isOfficial) {
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${officialStr}${shinyStr}${id}.png`;
+  if (spriteId) {
+    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${officialStr}${backStr}${shinyStr}${spriteId}.png`;
   }
   
-  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${backStr}${shinyStr}${id}.png`;
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${officialStr}${backStr}${shinyStr}0.png`;
 };
 
 const migrateRarity = (rarity: string): Rarity => {
@@ -23789,18 +23877,75 @@ const migratePokemon = (p: any): any => {
   };
 };
 
+const LabPokemonButton = React.memo(({ p, isSelected, onClick }: { p: PokemonCard, isSelected: boolean, onClick: (id: string) => void }) => (
+  <button
+    onClick={() => onClick(p.instanceId)}
+    className={`p-3 rounded-2xl border transition-all flex items-center gap-3 ${isSelected ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 border-white/5 hover:bg-zinc-800'}`}
+  >
+    <img 
+      loading="lazy"
+      decoding="async"
+      src={getPokemonImage(p)} 
+      alt="" 
+      className="w-10 h-10 object-contain"
+      referrerPolicy="no-referrer"
+    />
+    <div className="text-left overflow-hidden">
+      <div className={`text-[10px] font-black uppercase italic truncate ${isSelected ? 'text-white' : 'text-zinc-300'}`}>{p.name}</div>
+      <div className="flex items-center gap-2">
+        <div className={`text-[8px] font-bold uppercase ${isSelected ? 'text-indigo-200' : 'text-zinc-500'}`}>PWR {p.ovr}</div>
+        {p.fatigue > 70 && <AlertTriangle size={8} className="text-rose-500 animate-pulse" />}
+      </div>
+    </div>
+  </button>
+));
+
+const ExplorePokemonButton = React.memo(({ p, isSelected, onClick }: { p: PokemonCard, isSelected: boolean, onClick: (id: string) => void }) => (
+  <button
+    onClick={() => onClick(p.instanceId)}
+    className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 relative overflow-hidden group ${
+      isSelected 
+        ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/20' 
+        : 'border-white/5 bg-zinc-900/50 hover:border-white/20'
+    }`}
+  >
+    <div className="absolute top-1 right-1">
+      <Heart size={10} className={p.happiness > 200 ? 'text-rose-500' : 'text-zinc-600'} fill={p.happiness > 200 ? 'currentColor' : 'none'} />
+    </div>
+    <img 
+      loading="lazy"
+      decoding="async"
+      src={getPokemonImage(p)} 
+      alt={p.name}
+      className="w-16 h-16 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
+      referrerPolicy="no-referrer"
+    />
+    <div className="text-[10px] font-black text-white uppercase truncate w-full text-center">{p.name}</div>
+    <div className="text-[8px] font-bold text-zinc-500 uppercase">Felicidad: {Math.floor((p.happiness / 255) * 100)}%</div>
+  </button>
+));
+
 export default function App() {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'team' | 'shop' | 'battles' | 'pokedex' | 'lab' | 'market' | 'settings' | 'hallOfFame' | 'missions' | 'event' | 'facilities' | 'staff' | 'league' | 'inventory' | 'explore' | 'multiplayer' | 'friends'>('team');
+  const [activeTab, setActiveTab] = useState<'team' | 'shop' | 'battles' | 'pokedex' | 'lab' | 'market' | 'settings' | 'hallOfFame' | 'missions' | 'event' | 'facilities' | 'staff' | 'league' | 'inventory' | 'explore' | 'multiplayer' | 'friends' | 'battlePass'>('team');
   const [gameState, setGameState] = useState<'management' | 'battle'>('management');
   const [selectedLabPokemonId, setSelectedLabPokemonId] = useState<string | null>(null);
   const [showBatchTraining, setShowBatchTraining] = useState(false);
   const [batchSelectedPokemon, setBatchSelectedPokemon] = useState<string[]>([]);
   const [batchTargetLevel, setBatchTargetLevel] = useState<number>(10);
+  const [collection, setCollection] = useState<PokemonCard[]>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('plm_collection') || '[]');
+      return Array.isArray(parsed) ? parsed.map(migratePokemon) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [showLoginPrompt, setShowLoginPrompt] = useState(() => {
     const saved = localStorage.getItem('plm_collection');
     if (!saved) return true;
@@ -23858,14 +24003,18 @@ export default function App() {
   const [teamName, setTeamName] = useState(() => localStorage.getItem('plm_teamName') || 'Mis Pokémon');
   const [teamLogo, setTeamLogo] = useState(() => localStorage.getItem('plm_teamLogo') || '🛡️');
   const [totalMatches, setTotalMatches] = useState(() => Number(localStorage.getItem('plm_totalMatches')) || 0);
-  const [collection, setCollection] = useState<PokemonCard[]>(() => {
-    try {
-      const parsed = JSON.parse(localStorage.getItem('plm_collection') || '[]');
-      return Array.isArray(parsed) ? parsed.map(migratePokemon) : [];
-    } catch {
-      return [];
-    }
-  });
+
+  const availableForBatchTraining = useMemo(() => 
+    collection.filter(p => p.level < batchTargetLevel && p.level < p.maxLevel),
+  [collection, batchTargetLevel]);
+  const memoizedRoster = useMemo(() => collection.map(c => ({
+    ...c,
+    pokedexNumber: c.id,
+    id: c.instanceId,
+    sprite: getPokemonImage(c, false, true),
+    baseStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe },
+    currentStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe }
+  })), [collection]);
   const [team, setTeam] = useState<string[]>(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem('plm_team') || '[]');
@@ -24109,12 +24258,71 @@ export default function App() {
   });
   const [globalBattleSpeed, setGlobalBattleSpeed] = useState(() => Number(localStorage.getItem('plm_globalBattleSpeed')) || 1);
   const [evolvingPokemon, setEvolvingPokemon] = useState<{ from: PokemonCard, to: PokemonCard } | null>(null);
+  const [battlePass, setBattlePass] = useState<BattlePass>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('plm_battlePass') || 'null');
+      return parsed || { level: 1, exp: 0, claimedFree: [], claimedPremium: [], isPremium: false };
+    } catch {
+      return { level: 1, exp: 0, claimedFree: [], claimedPremium: [], isPremium: false };
+    }
+  });
+  const [lastDailyReward, setLastDailyReward] = useState<number>(() => Number(localStorage.getItem('plm_lastDailyReward')) || 0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Interface & Settings States
   const [theme, setTheme] = useState(() => localStorage.getItem('plm_theme') || 'zinc');
   const [audioEnabled, setAudioEnabled] = useState(() => localStorage.getItem('plm_audioEnabled') !== 'false');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('plm_notificationsEnabled') !== 'false');
+
+  // Pokédex Filtering & Sorting States
+  const [pokedexFilterType, setPokedexFilterType] = useState<string>('Todos');
+  const [pokedexFilterRarity, setPokedexFilterRarity] = useState<string>('Todas');
+  const [pokedexSortBy, setPokedexSortBy] = useState<'id' | 'name' | 'rarity'>('id');
+
+  const allTypes = useMemo(() => {
+    const types = new Set<string>();
+    POKEDEX_BASE.forEach(p => p.types.forEach(t => types.add(t)));
+    return Array.from(types).sort();
+  }, []);
+
+  const allRarities = ['Común', 'Poco común', 'Raro', 'Pseudo-legendario', 'Legendario', 'Singular (Mítico)', 'Ultraente', 'Pokémon Paradoja'];
+
+  const filteredPokedex = useMemo(() => {
+    let result = [...POKEDEX_BASE];
+    
+    if (pokedexFilterType !== 'Todos') {
+      result = result.filter(p => p.types.includes(pokedexFilterType));
+    }
+    
+    if (pokedexFilterRarity !== 'Todas') {
+      result = result.filter(p => p.rarity === pokedexFilterRarity);
+    }
+    
+    result.sort((a, b) => {
+      if (pokedexSortBy === 'name') {
+        return a.name.localeCompare(b.name);
+      } else if (pokedexSortBy === 'rarity') {
+        const rarityOrder: Record<string, number> = {
+          'Común': 0,
+          'Poco común': 1,
+          'Raro': 2,
+          'Pseudo-legendario': 3,
+          'Legendario': 4,
+          'Singular (Mítico)': 5,
+          'Ultraente': 6,
+          'Pokémon Paradoja': 7
+        };
+        const aOrder = rarityOrder[a.rarity || 'Común'] ?? 0;
+        const bOrder = rarityOrder[b.rarity || 'Común'] ?? 0;
+        if (aOrder !== bOrder) return bOrder - aOrder; // Higher rarity first
+        return a.id - b.id;
+      } else {
+        return a.id - b.id;
+      }
+    });
+    
+    return result;
+  }, [pokedexFilterType, pokedexFilterRarity, pokedexSortBy]);
 
   useEffect(() => {
     localStorage.setItem('plm_tutorial_completed', String(tutorialCompleted));
@@ -24804,7 +25012,9 @@ export default function App() {
     localStorage.setItem('plm_theme', theme);
     localStorage.setItem('plm_audioEnabled', String(audioEnabled));
     localStorage.setItem('plm_notificationsEnabled', String(notificationsEnabled));
-  }, [coins, stardust, energy, tp, banditas, evolutionStones, heldItems, teamName, teamLogo, totalMatches, collection, team, history, leagueLevel, pokedex, badges, defeatedGyms, isLeagueQualified, leagueTeams, schedule, currentWeek, season, isTournamentMode, tournamentPlayedThisSeason, isChampionshipTournament, tournamentRule, tournamentBracket, activeSponsor, items, hallOfFame, nursery, marketOffers, globalBattleSpeed, activeEvent, missions, lastMissionReset, theme, audioEnabled, notificationsEnabled]);
+    localStorage.setItem('plm_battlePass', JSON.stringify(battlePass));
+    localStorage.setItem('plm_lastDailyReward', lastDailyReward.toString());
+  }, [coins, stardust, energy, tp, banditas, evolutionStones, heldItems, teamName, teamLogo, totalMatches, collection, team, history, leagueLevel, pokedex, badges, defeatedGyms, isLeagueQualified, leagueTeams, schedule, currentWeek, season, isTournamentMode, tournamentPlayedThisSeason, isChampionshipTournament, tournamentRule, tournamentBracket, activeSponsor, items, hallOfFame, nursery, marketOffers, globalBattleSpeed, activeEvent, missions, lastMissionReset, theme, audioEnabled, notificationsEnabled, battlePass, lastDailyReward]);
 
   // Helper to remove undefined values for Firestore
   const sanitizeForFirestore = (obj: any): any => {
@@ -26370,6 +26580,9 @@ export default function App() {
     setBattleData(prev => {
       if (!prev) return null;
       const next = { ...prev };
+      next.playerTeam = [...prev.playerTeam];
+      next.playerTeam[next.playerIdx] = { ...prev.playerTeam[next.playerIdx] };
+      next.playerTeam[next.playerIdx].p = { ...prev.playerTeam[next.playerIdx].p };
       const p = next.playerTeam[next.playerIdx].p;
       
       // Apply Mega Evolution stats boost (simplified: +30 to all base stats)
@@ -26942,6 +27155,58 @@ export default function App() {
     setHistory(prev => [msg, ...prev].slice(0, 10));
   };
 
+  const claimDailyReward = () => {
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    
+    if (now - lastDailyReward < oneDay) {
+      throw new Error('Ya has reclamado tu regalo de hoy. Vuelve mañana.');
+    }
+
+    const coinReward = Math.floor(Math.random() * 500) + 500;
+    const stardustReward = Math.floor(Math.random() * 100) + 50;
+    
+    setCoins(prev => prev + coinReward);
+    setStardust(prev => prev + stardustReward);
+    setLastDailyReward(now);
+    setHistory(prev => [`🎁 ¡Regalo Diario! Has recibido ${coinReward} monedas y ${stardustReward} polvos estelares.`, ...prev].slice(0, 10));
+  };
+
+  const addBattlePassExp = (amount: number) => {
+    setBattlePass(prev => {
+      let newExp = prev.exp + amount;
+      let newLevel = prev.level;
+      const expNeeded = newLevel * 500;
+      
+      if (newExp >= expNeeded) {
+        newExp -= expNeeded;
+        newLevel += 1;
+        setHistory(prevH => [`✨ ¡Nivel de Battle Pass aumentado! Ahora eres Nivel ${newLevel}.`, ...prevH].slice(0, 10));
+      }
+      
+      return { ...prev, level: newLevel, exp: newExp };
+    });
+  };
+
+  const claimBattlePassReward = (tier: number) => {
+    if (battlePass.level < tier) return;
+    if (battlePass.claimedFree.includes(tier)) return;
+
+    const reward = BATTLE_PASS_REWARDS.find(r => r.tier === tier);
+    if (!reward) return;
+
+    if (reward.type === 'coins') setCoins(prev => prev + reward.amount!);
+    if (reward.type === 'stardust') setStardust(prev => prev + reward.amount!);
+    if (reward.type === 'tp') setTp(prev => prev + reward.amount!);
+    
+    setBattlePass(prev => ({
+      ...prev,
+      claimedFree: [...prev.claimedFree, tier]
+    }));
+
+    setHistory(prev => [`🎁 ¡Recompensa de Battle Pass! Has reclamado ${reward.name}.`, ...prev].slice(0, 10));
+  };
+
   const toggleAuto = () => {
     setBattleData(prev => prev ? { ...prev, isAuto: !prev.isAuto } : null);
   };
@@ -27017,7 +27282,10 @@ export default function App() {
   };
 
   return (
-    <div data-theme={theme} className="flex h-screen bg-zinc-950 overflow-hidden font-sans selection:bg-rose-500/30 transition-colors duration-500">
+    <div data-theme={theme} className="flex h-screen bg-zinc-950 overflow-hidden font-sans selection:bg-rose-500/30 transition-colors duration-1000 relative">
+      {/* Global Scanline Effect */}
+      <div className="fixed inset-0 pointer-events-none z-[100] scanline opacity-20" />
+      
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -27068,18 +27336,25 @@ export default function App() {
                 { id: 'friends', icon: UserPlus, label: 'Amigos', color: 'indigo' },
                 { id: 'league', icon: Building2, label: 'Liga Pokémon', color: 'amber' },
                 { id: 'pokedex', icon: Info, label: 'Pokédex', color: 'rose' },
+                { id: 'battlePass', icon: Zap, label: 'Battle Pass', color: 'indigo' },
                 { id: 'hallOfFame', icon: Award, label: 'Salón Fama', color: 'amber' },
                 { id: 'settings', icon: Settings, label: 'Ajustes', color: 'zinc' },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => { setActiveTab(tab.id as any); setIsSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-black uppercase tracking-tight transition-all group ${
+                  className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-black uppercase tracking-tight transition-all group relative overflow-hidden ${
                     activeTab === tab.id 
                       ? `bg-${tab.color === 'zinc' ? 'zinc-700' : tab.color + '-600'} text-white shadow-lg shadow-${tab.color === 'zinc' ? 'zinc-700' : tab.color + '-600'}/20` 
                       : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
                   }`}
                 >
+                  {activeTab === tab.id && (
+                    <motion.div 
+                      layoutId="activeTabGlow"
+                      className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent pointer-events-none"
+                    />
+                  )}
                   <tab.icon size={20} className={activeTab === tab.id ? 'text-white' : `group-hover:text-${tab.color === 'zinc' ? 'zinc-400' : tab.color + '-400'} transition-colors`} />
                   {tab.label}
                 </button>
@@ -27106,13 +27381,13 @@ export default function App() {
 
       {/* Sidebar - Desktop */}
       {!showStarterSelect && !showLoginPrompt && gameState === 'management' && (
-        <aside className="hidden lg:flex w-72 flex-col border-r border-white/5 bg-zinc-900/50 backdrop-blur-xl z-50">
+        <aside className="hidden lg:flex w-72 flex-col border-r border-white/5 bg-zinc-900/50 backdrop-blur-xl z-50 glass-panel">
           <div className="p-8 border-b border-white/5">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center shadow-lg shadow-rose-600/20">
+              <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center shadow-lg shadow-rose-600/20 animate-pulse-glow">
                 <Trophy size={20} className="text-white" />
               </div>
-              <h1 className="text-xl font-black italic uppercase tracking-tighter text-white text-gradient">PokeManager</h1>
+              <h1 className="text-xl font-black italic uppercase tracking-tighter text-white text-gradient text-shadow-glow">PokeManager</h1>
             </div>
             <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Elite League Edition</p>
           </div>
@@ -27132,18 +27407,25 @@ export default function App() {
               { id: 'friends', icon: UserPlus, label: 'Amigos', color: 'indigo' },
               { id: 'league', icon: Building2, label: 'Liga Pokémon', color: 'amber' },
               { id: 'pokedex', icon: Info, label: 'Pokédex', color: 'rose' },
+              { id: 'battlePass', icon: Zap, label: 'Battle Pass', color: 'indigo' },
               { id: 'hallOfFame', icon: Award, label: 'Salón Fama', color: 'amber' },
               { id: 'settings', icon: Settings, label: 'Ajustes', color: 'zinc' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-black uppercase tracking-tight transition-all group ${
+                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-black uppercase tracking-tight transition-all group relative overflow-hidden ${
                   activeTab === tab.id 
                     ? `bg-${tab.color === 'zinc' ? 'zinc-700' : tab.color + '-600'} text-white shadow-lg shadow-${tab.color === 'zinc' ? 'zinc-700' : tab.color + '-600'}/20` 
                     : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
                 }`}
               >
+                {activeTab === tab.id && (
+                  <motion.div 
+                    layoutId="activeTabGlowDesktop"
+                    className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent pointer-events-none"
+                  />
+                )}
                 <tab.icon size={20} className={activeTab === tab.id ? 'text-white' : `group-hover:text-${tab.color === 'zinc' ? 'zinc-400' : tab.color + '-400'} transition-colors`} />
                 {tab.label}
               </button>
@@ -27272,21 +27554,21 @@ export default function App() {
 
         {/* Header */}
         {!showStarterSelect && !showLoginPrompt && (
-          <header className="h-20 border-b border-white/5 bg-zinc-900/50 backdrop-blur-xl flex items-center justify-between px-4 md:px-8 sticky top-0 z-40">
+          <header className="h-20 border-b border-white/5 bg-zinc-900/50 backdrop-blur-xl flex items-center justify-between px-4 md:px-8 sticky top-0 z-40 glass-panel">
             <div className="flex items-center gap-4 md:gap-8">
               <button 
                 onClick={() => setIsSidebarOpen(true)}
-                className="lg:hidden w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-white hover:bg-zinc-700 transition-colors"
+                className="lg:hidden w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-white hover:bg-zinc-700 transition-colors shadow-lg"
               >
                 <Menu size={20} />
               </button>
               
               <div className="hidden sm:flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-500 to-indigo-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-500 to-indigo-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20 animate-float">
                   {teamLogo}
                 </div>
                 <div className="flex flex-col">
-                  <div className="text-lg md:text-xl font-black italic uppercase tracking-tighter text-white truncate w-32 md:w-48">{teamName}</div>
+                  <div className="text-lg md:text-xl font-black italic uppercase tracking-tighter text-white truncate w-32 md:w-48 text-shadow-glow">{teamName}</div>
                   <div className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Manager de Liga</div>
                 </div>
               </div>
@@ -27294,34 +27576,49 @@ export default function App() {
               <div className="hidden md:block h-8 w-px bg-white/10" />
               
               <div className="hidden xs:flex flex-col">
-                <div className="text-lg md:text-xl font-black italic text-white">T{season}</div>
+                <div className="text-lg md:text-xl font-black italic text-white text-shadow-glow">T{season}</div>
                 <div className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Temporada</div>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 md:gap-3 overflow-x-auto no-scrollbar py-2">
-                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner">
+                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner glass-panel">
                   <Coins size={14} className="text-amber-400" />
                   <span className="text-[11px] md:text-sm font-black text-white drop-shadow-md">{coins.toLocaleString()}</span>
                 </div>
-                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner">
+                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner glass-panel">
                   <Zap size={14} className="text-emerald-400" />
                   <span className="text-[11px] md:text-sm font-black text-white drop-shadow-md">{energy}</span>
                 </div>
-                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner">
+                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner glass-panel">
                   <Dumbbell size={14} className="text-indigo-400" />
                   <span className="text-[11px] md:text-sm font-black text-white drop-shadow-md">{tp.toLocaleString()}</span>
                 </div>
-                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner">
+                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner glass-panel">
                   <Sparkles size={14} className="text-purple-400" />
                   <span className="text-[11px] md:text-sm font-black text-white drop-shadow-md">{stardust.toLocaleString()}</span>
                 </div>
-                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner">
+                <div className="flex items-center gap-1.5 md:gap-2 bg-black/60 px-3 md:px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-inner glass-panel">
                   <Heart size={14} className="text-rose-400" />
                   <span className="text-[11px] md:text-sm font-black text-white drop-shadow-md">{banditas}</span>
                 </div>
               </div>
+              
+              <button
+                onClick={() => {
+                  try {
+                    claimDailyReward();
+                  } catch (e: any) {
+                    alert(e.message);
+                  }
+                }}
+                className="hidden sm:flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-full font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-amber-500/20 active:scale-95 group"
+              >
+                <Gift size={14} className="group-hover:rotate-12 transition-transform" />
+                Regalo Diario
+              </button>
+
               <ProfileMenu user={user} isSyncing={isCloudSyncing} />
             </div>
           </header>
@@ -27439,6 +27736,7 @@ export default function App() {
                         <div className="w-48 h-48 bg-black/40 rounded-full flex items-center justify-center relative">
                           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent rounded-full" />
                           <img 
+                            loading="lazy"
                             src={getPokemonImage({ id: [1, 4, 7, 152, 155, 158, 252, 255, 258, 387, 390, 393, 495, 498, 501, 650, 653, 656, 722, 725, 728, 810, 813, 816, 906, 909, 912][starterIndex] })}
                             alt={POKEDEX_BASE.find(p => p.id === [1, 4, 7, 152, 155, 158, 252, 255, 258, 387, 390, 393, 495, 498, 501, 650, 653, 656, 722, 725, 728, 810, 813, 816, 906, 909, 912][starterIndex])?.name}
                             className="w-40 h-40 object-contain relative z-10 drop-shadow-[0_0_20px_rgba(255,255,255,0.2)] group-hover:scale-110 transition-transform"
@@ -27613,6 +27911,7 @@ export default function App() {
                           >
                             {battleData.playerTeam[battleData.playerIdx]?.p && (
                               <img 
+                                loading="lazy"
                                 src={getPokemonImage(battleData.playerTeam[battleData.playerIdx].p, true)}
                                 className="w-[180px] md:w-[280px] h-[180px] md:h-[280px] object-contain"
                                 referrerPolicy="no-referrer"
@@ -27649,6 +27948,7 @@ export default function App() {
                           >
                             {battleData.rivalTeam[battleData.rivalIdx]?.p && (
                               <img 
+                                loading="lazy"
                                 src={getPokemonImage(battleData.rivalTeam[battleData.rivalIdx].p, false, true)}
                                 className="w-[140px] md:w-[220px] h-[140px] md:h-[220px] object-contain"
                                 referrerPolicy="no-referrer"
@@ -27865,7 +28165,7 @@ export default function App() {
                               className={`flex items-center justify-between p-2 rounded-xl ${idx === battleData.playerIdx ? 'bg-zinc-200' : member.hp <= 0 ? 'bg-red-100 opacity-50' : 'bg-zinc-50 hover:bg-zinc-100'} transition-colors text-left`}
                             >
                               <div className="flex items-center gap-2">
-                                <img src={getPokemonImage(member.p)} className="w-8 h-8 object-contain" />
+                                <img loading="lazy" decoding="async" src={getPokemonImage(member.p)} className="w-8 h-8 object-contain" />
                                 <div>
                                   <div className="font-bold text-[#303030] text-sm">{member.p.name}</div>
                                   <div className="text-[10px] text-[#303030]">Nv. {member.p.level}</div>
@@ -27996,6 +28296,7 @@ export default function App() {
                           <>
                             <div className={`absolute inset-0 bg-gradient-to-b ${getTypeGradient(teamMembers[i].types[0])} opacity-10`} />
                             <img 
+                              loading="lazy"
                               src={getPokemonImage(teamMembers[i])} 
                               alt="" 
                               className="w-full h-full object-contain group-hover:scale-125 transition-transform relative z-10 drop-shadow-2xl"
@@ -28704,6 +29005,7 @@ export default function App() {
                         <img 
                           src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${stone}-stone.png`} 
                           alt={stone}
+                          loading="lazy"
                           className="w-12 h-12 object-contain drop-shadow-md"
                           referrerPolicy="no-referrer"
                         />
@@ -28733,6 +29035,7 @@ export default function App() {
                       <img 
                         src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/lucarionite.png" 
                         alt="Mega Stone"
+                        loading="lazy"
                         className="w-12 h-12 object-contain drop-shadow-md"
                         referrerPolicy="no-referrer"
                       />
@@ -28784,6 +29087,7 @@ export default function App() {
                       <img 
                         src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${item.id}.png`} 
                         alt={item.name}
+                        loading="lazy"
                         className="w-12 h-12 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
                         referrerPolicy="no-referrer"
                       />
@@ -28992,6 +29296,30 @@ export default function App() {
                       {energy >= 100 ? 'Energía Llena' : 'Comprar'}
                     </button>
                   </div>
+
+                  <div className="bg-zinc-900 border border-white/5 rounded-3xl p-8 flex flex-col items-center text-center space-y-6 group hover:border-rose-500/50 transition-all">
+                    <div className="w-32 h-40 bg-gradient-to-br from-rose-500 to-rose-700 rounded-xl shadow-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
+                      <Heart size={48} className="text-white/80" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black uppercase italic">Banditas x5</h3>
+                      <p className="text-zinc-500 text-xs mt-2">Cura a tus Pokémon heridos.</p>
+                    </div>
+                    <div className="text-3xl font-black text-amber-400">1000 <span className="text-xs">Monedas</span></div>
+                    <button 
+                      onClick={() => {
+                        if (coins >= 1000) {
+                          setCoins(c => Math.max(0, c - 1000));
+                          setBanditas(b => b + 5);
+                          setHistory(prev => ["❤️ Has comprado 5 Banditas.", ...prev].slice(0, 10));
+                        }
+                      }}
+                      disabled={coins < 1000}
+                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${coins >= 1000 ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+                    >
+                      Comprar
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -29035,6 +29363,7 @@ export default function App() {
                         <img 
                           src={getPokemonImage(p)} 
                           alt={p.name}
+                          loading="lazy"
                           className="w-32 h-32 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] group-hover:scale-110 transition-transform"
                           referrerPolicy="no-referrer"
                         />
@@ -29257,27 +29586,12 @@ export default function App() {
                   </h3>
                   <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                     {collection.map(p => (
-                      <button
+                      <ExplorePokemonButton
                         key={p.instanceId}
-                        onClick={() => setSelectedExplorePokemonId(p.instanceId)}
-                        className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 relative overflow-hidden group ${
-                          selectedExplorePokemonId === p.instanceId 
-                            ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/20' 
-                            : 'border-white/5 bg-zinc-900/50 hover:border-white/20'
-                        }`}
-                      >
-                        <div className="absolute top-1 right-1">
-                          <Heart size={10} className={p.happiness > 200 ? 'text-rose-500' : 'text-zinc-600'} fill={p.happiness > 200 ? 'currentColor' : 'none'} />
-                        </div>
-                        <img 
-                          src={getPokemonImage(p)} 
-                          alt={p.name}
-                          className="w-16 h-16 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="text-[10px] font-black text-white uppercase truncate w-full text-center">{p.name}</div>
-                        <div className="text-[8px] font-bold text-zinc-500 uppercase">Felicidad: {Math.floor((p.happiness / 255) * 100)}%</div>
-                      </button>
+                        p={p}
+                        isSelected={selectedExplorePokemonId === p.instanceId}
+                        onClick={setSelectedExplorePokemonId}
+                      />
                     ))}
                   </div>
                 </div>
@@ -29833,14 +30147,7 @@ export default function App() {
               className="h-full"
             >
               <MultiplayerTab 
-                roster={collection.map(c => ({
-                  ...c,
-                  pokedexNumber: c.id,
-                  id: c.instanceId,
-                  sprite: getPokemonImage(c, false, true),
-                  baseStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe },
-                  currentStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe }
-                }))}
+                roster={memoizedRoster}
                 activeTeamIds={team}
                 onWin={() => setCoins(prev => prev + 5000)}
               />
@@ -29857,13 +30164,7 @@ export default function App() {
             >
               <FriendsTab 
                 setActiveTab={setActiveTab} 
-                roster={collection.map(c => ({
-                  ...c,
-                  pokedexNumber: c.id,
-                  id: c.instanceId,
-                  baseStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe },
-                  currentStats: { hp: c.hp, atk: c.atk, def: c.def, spa: c.atk, spd: c.def, spe: c.spe }
-                }))}
+                roster={memoizedRoster}
                 activeTeamIds={team}
               />
             </motion.div>
@@ -29917,25 +30218,12 @@ export default function App() {
                   </div>
                   <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                     {collection.map(p => (
-                      <button
-                        key={p.instanceId}
-                        onClick={() => setSelectedLabPokemonId(p.instanceId)}
-                        className={`p-3 rounded-2xl border transition-all flex items-center gap-3 ${selectedLabPokemonId === p.instanceId ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 border-white/5 hover:bg-zinc-800'}`}
-                      >
-                        <img 
-                          src={getPokemonImage(p)} 
-                          alt="" 
-                          className="w-10 h-10 object-contain"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="text-left overflow-hidden">
-                          <div className={`text-[10px] font-black uppercase italic truncate ${selectedLabPokemonId === p.instanceId ? 'text-white' : 'text-zinc-300'}`}>{p.name}</div>
-                          <div className="flex items-center gap-2">
-                            <div className={`text-[8px] font-bold uppercase ${selectedLabPokemonId === p.instanceId ? 'text-indigo-200' : 'text-zinc-500'}`}>PWR {p.ovr}</div>
-                            {p.fatigue > 70 && <AlertTriangle size={8} className="text-rose-500 animate-pulse" />}
-                          </div>
-                        </div>
-                      </button>
+                      <LabPokemonButton 
+                        key={p.instanceId} 
+                        p={p} 
+                        isSelected={selectedLabPokemonId === p.instanceId} 
+                        onClick={setSelectedLabPokemonId} 
+                      />
                     ))}
                   </div>
                 </div>
@@ -29960,6 +30248,7 @@ export default function App() {
                             <div className={`aspect-square rounded-[24px] md:rounded-[32px] bg-gradient-to-br ${config.bg} border-2 ${config.border} flex items-center justify-center relative group`}>
                               <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-[22px] md:rounded-[30px]" />
                               <img 
+                                loading="lazy"
                                 src={getPokemonImage(p)} 
                                 alt={p.name}
                                 className="w-48 h-48 md:w-64 md:h-64 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]"
@@ -30250,8 +30539,48 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Filters & Sorting */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black uppercase text-zinc-500 mb-1 block ml-2">Filtrar por Tipo</label>
+                    <select 
+                      value={pokedexFilterType}
+                      onChange={(e) => setPokedexFilterType(e.target.value)}
+                      className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="Todos">Todos los Tipos</option>
+                      {allTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black uppercase text-zinc-500 mb-1 block ml-2">Filtrar por Rareza</label>
+                    <select 
+                      value={pokedexFilterRarity}
+                      onChange={(e) => setPokedexFilterRarity(e.target.value)}
+                      className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="Todas">Todas las Rarezas</option>
+                      {allRarities.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="w-full md:w-48">
+                  <label className="text-[10px] font-black uppercase text-zinc-500 mb-1 block ml-2">Ordenar por</label>
+                  <select 
+                    value={pokedexSortBy}
+                    onChange={(e) => setPokedexSortBy(e.target.value as any)}
+                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="id">ID (Nº Pokédex)</option>
+                    <option value="name">Nombre</option>
+                    <option value="rarity">Rareza</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-4">
-                {POKEDEX_BASE.map(p => {
+                {filteredPokedex.map(p => {
                   const isUnlocked = pokedex.includes(p.id);
                   return (
                     <div 
@@ -30261,6 +30590,7 @@ export default function App() {
                     >
                       <div className="text-[8px] sm:text-[10px] font-bold text-zinc-600 mb-1 sm:mb-2">#{p.id.toString().padStart(3, '0')}</div>
                       <img 
+                        loading="lazy"
                         src={getPokemonImage(p)} 
                         alt="" 
                         className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
@@ -30274,6 +30604,77 @@ export default function App() {
                           <Lock size={10} className="text-zinc-500" />
                         </div>
                       )}
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'battlePass' && gameState === 'management' && (
+            <motion.div 
+              key="battlePass"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8 pb-24"
+            >
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-[40px] p-8 md:p-12 relative overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20" />
+                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="space-y-4 text-center md:text-left">
+                    <div className="inline-block px-4 py-1 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md">Temporada 1: El Despertar</div>
+                    <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white drop-shadow-lg">Battle Pass</h2>
+                    <p className="text-indigo-100 font-medium max-w-md">Completa misiones y gana combates para subir de nivel y desbloquear recompensas exclusivas.</p>
+                  </div>
+                  <div className="flex flex-col items-center bg-black/30 backdrop-blur-xl p-6 rounded-3xl border border-white/10 min-w-[200px]">
+                    <div className="text-[10px] font-black uppercase text-indigo-300 tracking-widest mb-2">Nivel Actual</div>
+                    <div className="text-6xl font-black italic text-white tracking-tighter">{battlePass.level}</div>
+                    <div className="w-full mt-4 h-2 bg-white/10 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(battlePass.exp / (battlePass.level * 500)) * 100}%` }}
+                        className="h-full bg-indigo-400"
+                      />
+                    </div>
+                    <div className="text-[10px] font-bold text-indigo-200 mt-2 uppercase">{battlePass.exp} / {battlePass.level * 500} EXP</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                {BATTLE_PASS_REWARDS.map((reward) => {
+                  const isUnlocked = battlePass.level >= reward.tier;
+                  const isClaimed = battlePass.claimedFree.includes(reward.tier);
+                  
+                  return (
+                    <div 
+                      key={reward.tier}
+                      className={`relative group rounded-[32px] p-6 border transition-all ${isUnlocked ? 'bg-zinc-900 border-indigo-500/30 hover:border-indigo-500/60' : 'bg-zinc-900/40 border-white/5 opacity-60'}`}
+                    >
+                      <div className="absolute top-4 right-4 text-[10px] font-black text-zinc-500 uppercase tracking-widest">Tier {reward.tier}</div>
+                      
+                      <div className="flex flex-col items-center gap-4 mt-4">
+                        <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-3xl shadow-lg ${isUnlocked ? 'bg-indigo-600/20 text-indigo-400' : 'bg-zinc-800 text-zinc-600'}`}>
+                          {reward.type === 'coins' && <Coins size={32} />}
+                          {reward.type === 'stardust' && <Sparkles size={32} />}
+                          {reward.type === 'tp' && <Zap size={32} />}
+                          {reward.type === 'item' && <Package size={32} />}
+                        </div>
+                        
+                        <div className="text-center">
+                          <div className="text-xs font-black uppercase text-white mb-1">{reward.name}</div>
+                          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Recompensa Gratuita</div>
+                        </div>
+
+                        <button
+                          onClick={() => claimBattlePassReward(reward.tier)}
+                          disabled={!isUnlocked || isClaimed}
+                          className={`w-full py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${isClaimed ? 'bg-emerald-500/20 text-emerald-500 cursor-default' : isUnlocked ? 'bg-white text-black hover:bg-indigo-500 hover:text-white' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}
+                        >
+                          {isClaimed ? 'Reclamado' : isUnlocked ? 'Reclamar' : 'Bloqueado'}
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -30314,6 +30715,7 @@ export default function App() {
                       <div className="flex items-center gap-6 mb-8">
                         <div className="w-24 h-24 bg-black/40 rounded-full flex items-center justify-center relative">
                           <img 
+                            loading="lazy"
                             src={getPokemonImage(p)}
                             alt={p.name}
                             className="w-20 h-20 object-contain relative z-10 drop-shadow-[0_0_15px_rgba(255,215,0,0.4)]"
@@ -30674,20 +31076,19 @@ export default function App() {
                       <div className="text-sm font-bold text-zinc-400 uppercase">Selecciona Pokémon ({batchSelectedPokemon.length})</div>
                       <button 
                         onClick={() => {
-                          const available = collection.filter(p => p.level < batchTargetLevel && p.level < p.maxLevel);
-                          if (batchSelectedPokemon.length === available.length) {
+                          if (batchSelectedPokemon.length === availableForBatchTraining.length) {
                             setBatchSelectedPokemon([]);
                           } else {
-                            setBatchSelectedPokemon(available.map(p => p.instanceId));
+                            setBatchSelectedPokemon(availableForBatchTraining.map(p => p.instanceId));
                           }
                         }}
                         className="text-xs font-black text-indigo-400 uppercase"
                       >
-                        {batchSelectedPokemon.length === collection.filter(p => p.level < batchTargetLevel && p.level < p.maxLevel).length ? 'Deseleccionar Todos' : 'Seleccionar Todos'}
+                        {batchSelectedPokemon.length === availableForBatchTraining.length ? 'Deseleccionar Todos' : 'Seleccionar Todos'}
                       </button>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                      {collection.filter(p => p.level < batchTargetLevel && p.level < p.maxLevel).map(p => (
+                      {availableForBatchTraining.map(p => (
                         <div 
                           key={p.instanceId}
                           onClick={() => {
@@ -30700,7 +31101,7 @@ export default function App() {
                           className={`relative cursor-pointer rounded-2xl border-2 p-2 transition-all ${batchSelectedPokemon.includes(p.instanceId) ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5 bg-zinc-800/50 hover:border-white/20'}`}
                         >
                           <div className="flex items-center gap-3">
-                            <img src={getPokemonImage(p)} alt="" className="w-12 h-12 object-contain" referrerPolicy="no-referrer" />
+                            <img loading="lazy" src={getPokemonImage(p)} alt="" className="w-12 h-12 object-contain" referrerPolicy="no-referrer" />
                             <div>
                               <div className="text-xs font-black uppercase truncate text-white">{p.name}</div>
                               <div className="text-[10px] font-bold text-zinc-500 uppercase">Nivel {p.level}/{p.maxLevel}</div>
@@ -30713,7 +31114,7 @@ export default function App() {
                           )}
                         </div>
                       ))}
-                      {collection.filter(p => p.level < batchTargetLevel && p.level < p.maxLevel).length === 0 && (
+                      {availableForBatchTraining.length === 0 && (
                         <div className="col-span-full text-center py-8 text-zinc-500 text-sm font-bold uppercase">
                           No hay Pokémon disponibles para entrenar a este nivel.
                         </div>
@@ -30885,6 +31286,7 @@ export default function App() {
                     className="flex flex-col items-center gap-4"
                   >
                     <img 
+                      loading="lazy"
                       src={getPokemonImage(evolvingPokemon.from)} 
                       alt="" 
                       className="w-48 h-48 object-contain"
@@ -30913,6 +31315,7 @@ export default function App() {
                     className="flex flex-col items-center gap-4"
                   >
                     <img 
+                      loading="lazy"
                       src={getPokemonImage({ ...evolvingPokemon.to, isShiny: evolvingPokemon.from.isShiny })} 
                       alt="" 
                       className="w-64 h-64 object-contain drop-shadow-[0_0_30px_rgba(244,63,94,0.6)]"
@@ -31077,6 +31480,7 @@ export default function App() {
                       {teamMembers.map(p => (
                         <div key={p.instanceId} className="bg-black/40 rounded-xl p-2 border border-white/5 flex flex-col items-center">
                           <img 
+                            loading="lazy"
                             src={getPokemonImage(p)} 
                             className="w-12 h-12 object-contain"
                             referrerPolicy="no-referrer"
@@ -31127,6 +31531,7 @@ export default function App() {
                         {previewRivalTeam?.map((item, idx) => (
                           <div key={idx} className="bg-black/40 rounded-xl p-2 border border-white/5 flex flex-col items-center">
                             <img 
+                              loading="lazy"
                               src={getPokemonImage(item.p)} 
                               className="w-12 h-12 object-contain"
                               referrerPolicy="no-referrer"
@@ -31201,6 +31606,7 @@ export default function App() {
                 </div>
                 
                 <motion.img 
+                  loading="lazy"
                   layoutId={`pokedex-img-${selectedPokedexPokemon.id}`}
                   src={getPokemonImage(selectedPokedexPokemon)}
                   className={`w-40 h-40 sm:w-56 sm:h-56 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.1)] ${!pokedex.includes(selectedPokedexPokemon.id) ? 'grayscale opacity-50' : ''}`}
@@ -31287,6 +31693,7 @@ export default function App() {
                             <React.Fragment key={evId}>
                               <div className={`w-12 h-12 rounded-xl border flex items-center justify-center ${isCurrent ? 'border-indigo-500 bg-indigo-500/20' : 'border-white/5 bg-black/50'} ${!isUnlocked ? 'grayscale opacity-30' : ''}`}>
                                 <img 
+                                  loading="lazy"
                                   src={getPokemonImage({ id: evId })} 
                                   className="w-10 h-10 object-contain"
                                   referrerPolicy="no-referrer"
@@ -31539,6 +31946,7 @@ export default function App() {
                   </div>
 
                   <motion.img 
+                    loading="lazy"
                     layoutId={`pokemon-img-${selectedPokemon.instanceId}`}
                     src={getPokemonImage(selectedPokemon)}
                     className={`w-36 h-36 sm:w-48 sm:h-48 md:w-64 md:h-64 object-contain relative z-10 drop-shadow-[0_0_50px_rgba(255,255,255,0.2)] ${selectedPokemon.isInjured ? 'grayscale opacity-50' : ''}`}
@@ -31968,6 +32376,7 @@ export default function App() {
                     >
                       <div className="flex items-center gap-3">
                         <img 
+                          loading="lazy"
                           src={getPokemonImage({ id: opt.id, isShiny: pendingEvolution.pokemon.isShiny })} 
                           alt={nextBase.name} 
                           className="w-12 h-12" 
@@ -31979,6 +32388,7 @@ export default function App() {
                             {isStone ? (
                               <div className="flex items-center gap-1">
                                 <img 
+                                  loading="lazy"
                                   src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${stoneName}-stone.png`}
                                   alt={stoneName}
                                   className="w-4 h-4 object-contain"
@@ -32043,6 +32453,7 @@ export default function App() {
                     >
                       <div className="w-12 h-12 rounded-xl bg-black/40 flex items-center justify-center border border-white/10 group-hover:border-blue-500/50 transition-colors">
                         <img 
+                          loading="lazy"
                           src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${itemId}.png`} 
                           alt={itemId}
                           className="w-8 h-8 object-contain"
@@ -32091,7 +32502,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <TutorialOverlay />
+      {TutorialOverlay()}
 
     </div>
   </div>

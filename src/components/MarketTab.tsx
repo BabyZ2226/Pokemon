@@ -114,6 +114,7 @@ export default function MarketTab() {
                 <div className="flex-1 flex items-center justify-center py-8 relative group/sprite">
                   <div className="absolute inset-0 bg-indigo-500/5 rounded-full blur-3xl opacity-0 group-hover/sprite:opacity-100 transition-opacity" />
                   <img 
+                    loading="lazy"
                     src={p.sprite} 
                     alt={p.name} 
                     className="w-32 h-32 object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] relative z-10 group-hover/sprite:scale-110 transition-transform duration-500" 

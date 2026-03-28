@@ -18,3 +18,4 @@ View your app in AI Studio: https://ai.studio/apps/6c5caad4-0abf-4e9f-92b6-4252f
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+https://babyz2226.github.io/Pokemon/
